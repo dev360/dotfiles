@@ -1,0 +1,14 @@
+[alias]
+    co = checkout
+    ci = commit
+    st = status
+    a = add
+    d = diff
+    l = log --graph --pretty=format:'%C(yellow)%h%Creset -%C(red)%d%Creset %s %Cgreen(%ar) %C(bold blue)<%an>%Creset'
+    lol = log --graph --abbrev-commit --date=relative 
+
+[color]
+    ui = true
+
+[core]
+    editor = /usr/bin/vim
