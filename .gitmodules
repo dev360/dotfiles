@@ -1,0 +1,81 @@
+[submodule ".vim/bundle/vim-fugitive"]
+	path = .vim/bundle/vim-fugitive
+	url = http://github.com/tpope/vim-fugitive.git
+[submodule ".vim/bundle/vim-git"]
+	path = .vim/bundle/vim-git
+	url = git@github.com:tpope/vim-git.git
+[submodule ".vim/bundle/vim-haml"]
+	path = .vim/bundle/vim-haml
+	url = git@github.com:tpope/vim-haml.git
+[submodule ".vim/bundle/vim-gundo"]
+	path = .vim/bundle/vim-gundo
+	url = git@github.com:sjl/gundo.vim.git
+[submodule ".vim/bundle/vim-hexhighlight"]
+	path = .vim/bundle/vim-hexhighlight
+	url = git@github.com:vim-scripts/hexHighlight.vim.git
+[submodule ".vim/bundle/vim-ctrlp"]
+	path = .vim/bundle/vim-ctrlp
+	url = git@github.com:kien/ctrlp.vim.git
+[submodule ".vim/bundle/vim-coffee-script"]
+	path = .vim/bundle/vim-coffee-script
+	url = git@github.com:kchmck/vim-coffee-script.git
+[submodule ".vim/bundle/vim-colors-solarized"]
+	path = .vim/bundle/vim-colors-solarized
+	url = git@github.com:altercation/vim-colors-solarized.git
+[submodule ".vim/bundle/vim-fuzzyfinder"]
+	path = .vim/bundle/vim-fuzzyfinder
+	url = git@github.com:vim-scripts/FuzzyFinder.git
+[submodule ".vim/bundle/vim-syntastic"]
+	path = .vim/bundle/vim-syntastic
+	url = git@github.com:scrooloose/syntastic.git
+[submodule ".vim/bundle/vim-less"]
+	path = .vim/bundle/vim-less
+	url = git@github.com:groenewege/vim-less.git
+[submodule ".vim/bundle/vim-javascript"]
+	path = .vim/bundle/vim-javascript
+	url = git@github.com:pangloss/vim-javascript.git
+[submodule ".vim/bundle/vim-nerdcommenter"]
+	path = .vim/bundle/vim-nerdcommenter
+	url = git@github.com:scrooloose/nerdcommenter.git
+[submodule ".vim/bundle/vim-nerdtree"]
+	path = .vim/bundle/vim-nerdtree
+	url = git@github.com:scrooloose/nerdtree.git
+[submodule ".vim/bundle/vim-powerline"]
+	path = .vim/bundle/vim-powerline
+	url = git@github.com:Lokaltog/vim-powerline.git
+[submodule ".vim/bundle/vim-python-mode"]
+	path = .vim/bundle/vim-python-mode
+	url = git@github.com:klen/python-mode.git
+[submodule ".vim/bundle/vim-rails"]
+	path = .vim/bundle/vim-rails
+	url = git@github.com:tpope/vim-rails.git
+[submodule ".vim/bundle/vim-rake"]
+	path = .vim/bundle/vim-rake
+	url = git@github.com:tpope/vim-rake.git
+[submodule ".vim/bundle/vim-rspec"]
+	path = .vim/bundle/vim-rspec
+	url = git@github.com:thoughtbot/vim-rspec.git
+[submodule ".vim/bundle/vim-scss-syntax"]
+	path = .vim/bundle/vim-scss-syntax
+	url = git@github.com:cakebaker/scss-syntax.vim.git
+[submodule ".vim/bundle/vim-surround"]
+	path = .vim/bundle/vim-surround
+	url = git@github.com:tpope/vim-surround.git
+[submodule ".vim/bundle/vim-tabular"]
+	path = .vim/bundle/vim-tabular
+	url = git@github.com:godlygeek/tabular.git
+[submodule ".vim/bundle/vim-align"]
+	path = .vim/bundle/vim-align
+	url = git@github.com:vim-scripts/Align.git
+[submodule ".vim/bundle/vim-tagbar"]
+	path = .vim/bundle/vim-tagbar
+	url = git@github.com:majutsushi/tagbar.git
+[submodule ".vim/bundle/vim-flake8"]
+	path = .vim/bundle/vim-flake8
+	url = git@github.com:nvie/vim-flake8.git
+[submodule ".vim/bundle/vim-color-gruvbox"]
+	path = .vim/bundle/vim-color-gruvbox
+	url = git@github.com:morhetz/gruvbox.git
+[submodule ".vim/bundle/vim-ack"]
+	path = .vim/bundle/vim-ack
+	url = git@github.com:mileszs/ack.vim.git
