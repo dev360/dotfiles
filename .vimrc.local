@@ -1,6 +1,10 @@
+
+":set t_Co=256 " 256 colors
+":set background=dark
+
 set guifont=Bitstream\ Vera\ Sans\ Mono\ for\ Powerline:h12
 set background=dark
-colorscheme dev360_blue
+colorscheme gruvbox
 
 set cmdheight=2
 set winwidth=130
@@ -21,6 +25,7 @@ else
   map <F5> :GundoToggle<CR>
   map <F6> :JSLintToggle<CR>
 endif
+
 
 "Use TAB to complete when typing words, else inserts TABs as usual.
 "Uses dictionary and source files to find matching words to complete.
