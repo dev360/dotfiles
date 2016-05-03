@@ -31,6 +31,11 @@ ZSH_THEME="dev360"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 #plugins=(git)
 #compdef -d git
+#
+
+# Bash autocomplete fix
+autoload bashcompinit
+bashcompinit
 
 source $ZSH/oh-my-zsh.sh
 
