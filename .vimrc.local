@@ -1,9 +1,14 @@
+
+":set t_Co=256 " 256 colors
+":set background=dark
+
 set guifont=Bitstream\ Vera\ Sans\ Mono\ for\ Powerline:h12
 set background=dark
-colorscheme dev360_blue
+colorscheme gruvbox
 
 set cmdheight=2
 set winwidth=130
+
 
 
 "Use TAB to complete when typing words, else inserts TABs as usual.
