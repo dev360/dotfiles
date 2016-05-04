@@ -382,6 +382,8 @@ if filereadable(expand("~/.vimrc.local"))
     source ~/.vimrc.local
 endif
 
-if !exists('g:ctrlp_cmd') | let g:ctrlp_cmd = '<leader>p' | en
+if !exists('g:ctrlp_cmd') | let g:ctrlp_map = '<leader>p' | en
 
+noremap <leader>a =:Ack<space>
+noremap <leader>L =:PymodeLintToggle
 
