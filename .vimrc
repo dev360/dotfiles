@@ -394,3 +394,7 @@ set nofoldenable
 if filereadable(expand("~/.vimrc.local"))
     source ~/.vimrc.local
 endif
+
+if !exists('g:ctrlp_cmd') | let g:ctrlp_cmd = '<leader>p' | en
+
+
