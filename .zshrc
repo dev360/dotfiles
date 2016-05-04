@@ -31,6 +31,11 @@ ZSH_THEME="dev360"
 # Example format: plugins=(rails git textmate ruby lighthouse)
 #plugins=(git)
 #compdef -d git
+#
+
+# Bash autocomplete fix
+autoload bashcompinit
+bashcompinit
 
 source $ZSH/oh-my-zsh.sh
 
@@ -58,6 +63,7 @@ alias cd_o="cd ~/OpenSource/"
 alias clean_swp="find . -name '.*.swp' | xargs rm -f"
 
 # Python/Django aliases
+alias python="ipython"
 alias runserver="python manage.py runserver"
 alias shell="python manage.py shell"
 alias collectstatic="python manage.py collectstatic"
