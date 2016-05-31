@@ -10,7 +10,6 @@ set cmdheight=2
 set winwidth=130
 
 " Useful keyboard-shortcuts
-if has("mac")
   map <D-2> :NERDTreeToggle<CR>
   map <D-3> :TagbarToggle<CR>
   map <D-4> :noh<CR>
@@ -18,13 +17,11 @@ if has("mac")
   map <D-6> :JSLintToggle<CR>
   map <D-j> gj
   map <D-k> gk
-else
   map <F2> :NERDTreeToggle<CR>
   map <F3> :TagbarToggle<CR>
   map <F4> :noh<CR>
   map <F5> :GundoToggle<CR>
   map <F6> :JSLintToggle<CR>
-endif
 
 
 "Use TAB to complete when typing words, else inserts TABs as usual.

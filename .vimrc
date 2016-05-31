@@ -387,3 +387,13 @@ if !exists('g:ctrlp_cmd') | let g:ctrlp_map = '<leader>p' | en
 noremap <leader>a =:Ack<space>
 noremap <leader>L =:PymodeLintToggle
 
+"imap <leader>f ='<,'>Align<space>
+
+autocmd BufRead,BufNewFile *.coffee set nowrap tabstop=2 softtabstop=2 shiftwidth=2
+autocmd BufRead,BufNewFile *.js set nowrap tabstop=2 softtabstop=2 shiftwidth=2
+autocmd BufRead,BufNewFile *.less set nowrap tabstop=2 softtabstop=2 shiftwidth=2
+
+let g:pymode_lint_config = '$HOME/pylint.rc'
+autocmd FileType python set colorcolumn=120
+let NERDTreeIgnore = ['\.pyc$']
+
