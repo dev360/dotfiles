@@ -79,3 +79,6 @@
 [submodule ".vim/bundle/vim-ack"]
 	path = .vim/bundle/vim-ack
 	url = git@github.com:mileszs/ack.vim.git
+[submodule ".vim/bundle/elm-vim"]
+	path = .vim/bundle/elm-vim
+	url = git@github.com:ElmCast/elm-vim.git
