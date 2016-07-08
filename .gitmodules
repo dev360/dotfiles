@@ -79,3 +79,6 @@
 [submodule ".vim/bundle/vim-ack"]
 	path = .vim/bundle/vim-ack
 	url = git@github.com:mileszs/ack.vim.git
+[submodule ".vim/bundle/vim-eslint"]
+	path = .vim/bundle/vim-eslint
+	url = https://github.com/sfger/vim-eslint.git
