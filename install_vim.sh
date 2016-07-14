@@ -1,3 +1,7 @@
+
+# Pull all submodules first
+git pull && git submodule init && git submodule update && git submodule status
+
 cp -rf .vim ~/.vim
 cp -f .vimrc ~/.vimrc
 

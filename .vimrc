@@ -396,4 +396,4 @@ autocmd BufRead,BufNewFile *.less set nowrap tabstop=2 softtabstop=2 shiftwidth=
 let g:pymode_lint_config = '$HOME/pylint.rc'
 autocmd FileType python set colorcolumn=120
 let NERDTreeIgnore = ['\.pyc$']
-
+let g:syntastic_javascript_checkers = ['eslint']
