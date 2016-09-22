@@ -89,7 +89,7 @@ function! InlineVariable()
     :let @b = l:tmp_b
 endfunction
 nnoremap <leader>ri :call InlineVariable()<cr>
-
+nnoremap gp `[v`]
 
 " Run rspec
 :map ,t :w\|!clear && rspec %<cr>
