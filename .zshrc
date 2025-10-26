@@ -1,117 +1,149 @@
-# Path to your oh-my-zsh configuration.
-ZSH=$HOME/.oh-my-zsh
+# ============================================================================
+# Platform-agnostic ZSH Configuration
+# ============================================================================
 
-# Set name of the theme to load.
-# Look in ~/.oh-my-zsh/themes/
-# Optionally, if you set this to "random", it'll load a random theme each
-# time that oh-my-zsh is loaded.
-ZSH_THEME="dev360"
-
-# Example aliases
-# alias zshconfig="mate ~/.zshrc"
-# alias ohmyzsh="mate ~/.oh-my-zsh"
-
-# Set to this to use case-sensitive completion
-# CASE_SENSITIVE="true"
-
-# Comment this out to disable weekly auto-update checks
-# DISABLE_AUTO_UPDATE="true"
-
-# Uncomment following line if you want to disable colors in ls
-# DISABLE_LS_COLORS="true"
-
-# Uncomment following line if you want to disable autosetting terminal title.
-# DISABLE_AUTO_TITLE="true"
-
-# Uncomment following line if you want red dots to be displayed while waiting for completion
-# COMPLETION_WAITING_DOTS="true"
-
-# Which plugins would you like to load? (plugins can be found in ~/.oh-my-zsh/plugins/*)
-# Custom plugins may be added to ~/.oh-my-zsh/custom/plugins/
-# Example format: plugins=(rails git textmate ruby lighthouse)
-#plugins=(git)
-#compdef -d git
-#
-
-# Bash autocomplete fix
-autoload bashcompinit
-bashcompinit
-
-source $ZSH/oh-my-zsh.sh
-
-__git_files () { 
-    _wanted files expl 'local files' _files     
+# Helper function to check if command exists
+_has() {
+  return $( whence $1 >/dev/null )
 }
 
+# ============================================================================
+# History Configuration
+# ============================================================================
+HISTFILE=$HOME/.zsh_history
+SAVEHIST=100000
+HISTSIZE=100000
+setopt INC_APPEND_HISTORY  # Immediately appends history instead of overwriting
+setopt SHARE_HISTORY       # Shares history across multiple Zsh sessions
+setopt HIST_IGNORE_DUPS    # Ignores duplicate commands in history
 
-# Unixy stuff
-alias ls="ls -lh"
+# ============================================================================
+# Platform Detection
+# ============================================================================
+case "$(uname -s)" in
+  Darwin*)
+    export PLATFORM="macos"
+    ;;
+  Linux*)
+    export PLATFORM="linux"
+    ;;
+  *)
+    export PLATFORM="unknown"
+    ;;
+esac
+
+# ============================================================================
+# Aliases (Platform-Agnostic)
+# ============================================================================
+alias k="kubectl"
 alias c="clear"
-alias ss="source ~/.zshrc"
-
-function greph() {
-    history | grep "$1"
-}
-
-# To get into dirs
+alias vim="nvim"
 alias cd_d="cd ~/Downloads/"
 alias cd_p="cd ~/Projects/"
-alias cd_w="cd ~/Work/"
-alias cd_o="cd ~/OpenSource/"
-
-# Vim
 alias clean_swp="find . -name '.*.swp' | xargs rm -f"
 
-# Python/Django aliases
-alias python="ipython"
-alias runserver="python manage.py runserver"
-alias shell="python manage.py shell"
-alias collectstatic="python manage.py collectstatic"
-alias migrate_all="python manage.py migrate"
-alias migrate="python manage.py migrate"
-alias migration="python manage.py schemamigration"
-alias worker="python manage.py celery worker -l info"
+# Platform-specific ls aliases
+if [[ "$PLATFORM" == "macos" ]]; then
+  alias ls='ls -G'
+  alias ll='ls -alFG'
+  alias la='ls -AG'
+  alias l='ls -CFG'
+else
+  alias ls='ls --color=auto'
+  alias ll='ls -alF'
+  alias la='ls -A'
+  alias l='ls -CF'
+fi
 
-alias fab="nocorrect fab"
-alias ipython="nocorrect ipython"
-alias nose="nocorrect nose"
+# ============================================================================
+# Homebrew (macOS)
+# ============================================================================
+if [[ "$PLATFORM" == "macos" ]]; then
+  # Apple Silicon
+  if [[ -f "/opt/homebrew/bin/brew" ]]; then
+    eval "$(/opt/homebrew/bin/brew shellenv)"
+  # Intel Mac
+  elif [[ -f "/usr/local/bin/brew" ]]; then
+    eval "$(/usr/local/bin/brew shellenv)"
+  fi
+fi
 
-alias my_ip="curl icanhazip.com"
-alias puff="git pull origin master && git push origin master"
+# ============================================================================
+# NVM (Node Version Manager)
+# ============================================================================
+export NVM_DIR="$HOME/.nvm"
 
-alias clean_pyc="find . -name '*.pyc' | xargs rm -f"
+# macOS (Homebrew)
+if [[ "$PLATFORM" == "macos" && -s "/opt/homebrew/opt/nvm/nvm.sh" ]]; then
+  source "/opt/homebrew/opt/nvm/nvm.sh"
+  [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \
+    source "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
+# Linux/Generic
+elif [[ -s "$NVM_DIR/nvm.sh" ]]; then
+  source "$NVM_DIR/nvm.sh"
+  [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
+fi
 
-# Rails stuff 
-alias pow_install="curl get.pow.cx | sh"
-alias pow_uninstall="curl get.pow.cx/uninstall.sh | sh"
-alias rake_migrate="rake db:migrate && rake db:test:prepare"
-export PATH=/Users/ctoivola/.rbenv/shims:/Users/ctoivola/.rbenv/bin:/usr/local/bin:/usr/bin:$PATH
-eval "$(rbenv init -)"
+# ============================================================================
+# Development Tools
+# ============================================================================
 
-
-
-# Customize to your needs...
-export PATH=/Applications/Postgres.app/Contents/MacOS/bin:/usr/local/bin:/usr/local/sbin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/X11/lib
-
-
-export PYTHONPATH=/usr/local/lib/python2.7/site-packages
-
-# java
-export JAVA_HOME="$(/usr/libexec/java_home)"
-
-# Node
-export NVM_DIR="/Users/ctoivola/.nvm"
-[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"  # This loads nvm
+# Rust/Cargo
+if [[ -d "$HOME/.cargo/bin" ]]; then
+  export PATH="$HOME/.cargo/bin:$PATH"
+fi
 
 # Go
-export GOPATH="$HOME/Work/go"
+if [[ -d "$HOME/go/bin" ]]; then
+  export PATH="$PATH:$HOME/go/bin"
+fi
 
+# ============================================================================
+# Shell Enhancements
+# ============================================================================
 
+# Starship prompt
+if _has starship; then
+  eval "$(starship init zsh)"
+fi
 
-# EC2 Tools
-export EC2_HOME="/usr/local/Cellar/ec2-api-tools/1.6.12.0/libexec"
+# Zoxide (better cd)
+if _has zoxide; then
+  eval "$(zoxide init zsh)"
+fi
 
-# Added by the Heroku Toolbelt
-export PATH="/usr/local/heroku/bin:$PATH"
-export PATH="/usr/local/share/npm/bin:$PATH"
-export CLASSPATH=/usr/share/java:$CLASSPATH
+# Kubectl completion (only generate if not already present)
+if _has kubectl; then
+  if [[ ! -f "${fpath[1]}/_kubectl" ]]; then
+    kubectl completion zsh > "${fpath[1]}/_kubectl"
+  fi
+  autoload -Uz compinit && compinit
+fi
+
+# ============================================================================
+# Editor
+# ============================================================================
+if _has nvim; then
+  export EDITOR=$(which nvim)
+elif _has vim; then
+  export EDITOR=$(which vim)
+else
+  export EDITOR=$(which vi)
+fi
+
+# ============================================================================
+# Oh-My-Zsh (Optional)
+# ============================================================================
+# Uncomment if you use Oh-My-Zsh
+# export ZSH="$HOME/.oh-my-zsh"
+# ZSH_THEME="eastwood"
+# source $ZSH/oh-my-zsh.sh
+
+# ============================================================================
+# Local Configuration
+# ============================================================================
+# Source local configuration file if it exists
+# Use this for machine-specific settings, secrets, work configs, etc.
+if [[ -f "$HOME/.zshrc.local" ]]; then
+  source "$HOME/.zshrc.local"
+fi
