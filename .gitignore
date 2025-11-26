@@ -27,6 +27,8 @@ pip-log.txt
 
 #Swap files
 .sw*
+.config/zellij/zellij
+.config/nvim/nvim
 
 # Local shell configuration (may contain secrets)
 .zshrc.local
