@@ -13,6 +13,15 @@ Walk through git changes using vim's git diff integration (,gd).
 ## REASONING LOOP
 
 INIT:
+  - SILENT CHECK: Verify Neovim MCP is available
+    * Try to list available MCP tools (check for mcp__neovim__* tools)
+    * IF Neovim MCP NOT found:
+      - Output: "Neovim MCP is not installed."
+      - Output: "To install, run: claude mcp add neovim npx -y @modelcontextprotocol/server-neovim"
+      - STOP and wait for user to install
+    * IF Neovim MCP found:
+      - Continue silently (DO NOT mention MCP is installed)
+
   - Ask user: "What changes should I diff?" (or check if obvious from context)
   - Run: git diff --name-only (or git diff main...HEAD if on branch)
 

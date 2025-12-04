@@ -13,6 +13,15 @@ Show files being worked on in vim using intelligent split management.
 ## BEHAVIOR
 
 INIT:
+  - SILENT CHECK: Verify Neovim MCP is available
+    * Try to list available MCP tools (check for mcp__neovim__* tools)
+    * IF Neovim MCP NOT found:
+      - Output: "Neovim MCP is not installed."
+      - Output: "To install, run: claude mcp add neovim npx -y @modelcontextprotocol/server-neovim"
+      - STOP and wait for user to install
+    * IF Neovim MCP found:
+      - Continue silently (DO NOT mention MCP is installed)
+
   - Check vim_status to see current window layout
   - Identify files to show from conversation context
   - If no context, ask: "Which file(s) should I show?"

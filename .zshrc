@@ -37,10 +37,51 @@ esac
 # ============================================================================
 alias k="kubectl"
 alias c="clear"
-alias vim="nvim"
+alias cd_c="cd ~/Code/"
 alias cd_d="cd ~/Downloads/"
 alias cd_p="cd ~/Projects/"
 alias clean_swp="find . -name '.*.swp' | xargs rm -f"
+
+# Smart vim function that auto-detects MCP socket path
+# Remove any existing vim alias first
+unalias vim 2>/dev/null || true
+vim() {
+  local socket_path=""
+
+  # 1. Check for Claude Code settings in current directory or parent directories
+  local dir="$PWD"
+  while [[ "$dir" != "/" ]]; do
+    # Also check .settings.local.json for backwards compatibility
+    if [[ -f "$dir/.mcp.json" ]]; then
+      socket_path=$(jq -r '.mcpServers.neovim.env.NVIM_SOCKET_PATH // empty' "$dir/.mcp.json" 2>/dev/null)
+      [[ -n "$socket_path" ]] && break
+    fi
+    dir=$(dirname "$dir")
+  done
+
+  # 2. If not found, check global ~/.claude.json
+  if [[ -z "$socket_path" && -f "$HOME/.claude.json" ]]; then
+    # First try to find workspace-specific neovim config by walking up directories
+    local search_dir="$PWD"
+    while [[ "$search_dir" != "/" && -z "$socket_path" ]]; do
+      socket_path=$(jq -r --arg pwd "$search_dir" '.projects[$pwd].mcpServers.neovim.env.NVIM_SOCKET_PATH // empty' "$HOME/.claude.json" 2>/dev/null)
+      [[ -n "$socket_path" ]] && break
+      search_dir=$(dirname "$search_dir")
+    done
+
+    # Fall back to global mcpServers if no workspace-specific config found
+    if [[ -z "$socket_path" ]]; then
+      socket_path=$(jq -r '.mcpServers.neovim.env.NVIM_SOCKET_PATH // empty' "$HOME/.claude.json" 2>/dev/null)
+    fi
+  fi
+
+  # 3. Launch nvim with socket if found, otherwise run normally
+  if [[ -n "$socket_path" ]]; then
+    command nvim --listen "$socket_path" "$@"
+  else
+    command nvim "$@"
+  fi
+}
 
 # Platform-specific ls aliases
 if [[ "$PLATFORM" == "macos" ]]; then
@@ -140,6 +181,27 @@ fi
 # source $ZSH/oh-my-zsh.sh
 
 # ============================================================================
+# Claude MCP Configuration
+# ============================================================================
+# Add Neovim MCP server with auto-generated socket path for current directory
+add_nvim_mcp() {
+  # Get the current directory name
+  local dir_name="${PWD:t}"
+  local socket_path="/tmp/nvim-${dir_name}"
+
+  # Use claude mcp add command to add the neovim server
+  echo "Adding Neovim MCP server for project: $PWD"
+  echo "Socket path: $socket_path"
+
+  claude mcp add neovim \
+    --scope local \
+    --transport stdio \
+    --env "ALLOW_SHELL_COMMANDS=true" \
+    --env "NVIM_SOCKET_PATH=$socket_path" \
+    -- npx -y mcp-neovim-server
+}
+
+# ============================================================================
 # Local Configuration
 # ============================================================================
 # Source local configuration file if it exists
@@ -147,3 +209,18 @@ fi
 if [[ -f "$HOME/.zshrc.local" ]]; then
   source "$HOME/.zshrc.local"
 fi
+
+alias python="python3"
+alias pip="pip3"
+
+# Ensure history is flushed before the shell exits, compensating for environment issues
+function pre_zsh_exit() {
+    # Only if HISTFILE is set and exists, or can be created
+    if [[ -n "$HISTFILE" ]]; then
+        # Force the shell to write the history to the file
+        fc -R
+    fi
+}
+
+# Trap the EXIT signal and run the function
+trap pre_zsh_exit EXIT
