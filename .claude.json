@@ -33,6 +33,13 @@
         "@playwright/mcp@latest"
       ]
     },
+    "chrome-devtools": {
+      "command": "npx",
+      "args": [
+        "chrome-devtools-mcp@latest",
+        "--isolated=true"
+      ]
+    },
     "docker-mcp": {
       "type": "stdio",
       "command": "uvx",
@@ -62,7 +69,7 @@
     "github": {
       "type": "stdio",
       "command": "github-mcp-server",
-      "args": [],
+      "args": []
     }
   }
 }

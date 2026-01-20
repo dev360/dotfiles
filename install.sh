@@ -192,6 +192,25 @@ install_shell_tools() {
     else
         print_success "Oh-My-Zsh already installed"
     fi
+
+    # Oh-My-Zsh plugins
+    local ZSH_CUSTOM="${ZSH_CUSTOM:-$HOME/.oh-my-zsh/custom}"
+
+    if [ ! -d "$ZSH_CUSTOM/plugins/zsh-history-substring-search" ]; then
+        print_header "Installing zsh-history-substring-search plugin"
+        git clone https://github.com/zsh-users/zsh-history-substring-search "$ZSH_CUSTOM/plugins/zsh-history-substring-search"
+        print_success "zsh-history-substring-search installed"
+    else
+        print_success "zsh-history-substring-search already installed"
+    fi
+
+    if [ ! -d "$ZSH_CUSTOM/plugins/zsh-autosuggestions" ]; then
+        print_header "Installing zsh-autosuggestions plugin"
+        git clone https://github.com/zsh-users/zsh-autosuggestions "$ZSH_CUSTOM/plugins/zsh-autosuggestions"
+        print_success "zsh-autosuggestions installed"
+    else
+        print_success "zsh-autosuggestions already installed"
+    fi
 }
 
 # ============================================================================

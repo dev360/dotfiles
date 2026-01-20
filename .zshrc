@@ -13,9 +13,16 @@ _has() {
 HISTFILE=$HOME/.zsh_history
 SAVEHIST=100000
 HISTSIZE=100000
-setopt INC_APPEND_HISTORY  # Immediately appends history instead of overwriting
-setopt SHARE_HISTORY       # Shares history across multiple Zsh sessions
-setopt HIST_IGNORE_DUPS    # Ignores duplicate commands in history
+setopt INC_APPEND_HISTORY      # Immediately appends history instead of overwriting
+setopt SHARE_HISTORY           # Shares history across multiple Zsh sessions
+setopt HIST_IGNORE_DUPS        # Ignores duplicate commands in history
+setopt HIST_IGNORE_ALL_DUPS    # Remove older duplicate entries
+setopt HIST_FIND_NO_DUPS       # Don't show duplicates in search
+setopt HIST_SAVE_NO_DUPS       # Don't save duplicates
+setopt EXTENDED_HISTORY        # Add timestamps to history
+
+# Disable macOS per-session history (conflicts with Zellij/tmux)
+SHELL_SESSION_HISTORY=0
 
 # ============================================================================
 # Platform Detection
@@ -173,12 +180,49 @@ else
 fi
 
 # ============================================================================
-# Oh-My-Zsh (Optional)
+# Oh-My-Zsh
 # ============================================================================
-# Uncomment if you use Oh-My-Zsh
-# export ZSH="$HOME/.oh-my-zsh"
-# ZSH_THEME="eastwood"
-# source $ZSH/oh-my-zsh.sh
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME=""  # Disabled - using Starship instead
+
+# Plugins (install these to ~/.oh-my-zsh/custom/plugins/):
+#   git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
+#   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+plugins=(git history-substring-search zsh-autosuggestions)
+
+# Only load oh-my-zsh if it exists
+if [[ -d "$ZSH" ]]; then
+  source $ZSH/oh-my-zsh.sh
+fi
+
+# ============================================================================
+# Vi Mode Line Editing (avoids Ctrl key conflicts with Zellij/tmux)
+# ============================================================================
+bindkey -v
+
+# Faster mode switching (default 0.4s is sluggish)
+export KEYTIMEOUT=1
+
+# Keep some useful Ctrl bindings that don't conflict
+bindkey '^R' history-incremental-search-backward  # Ctrl+R - history search
+bindkey '^W' backward-kill-word                   # Ctrl+W - delete word
+
+# History substring search with arrows (works in both modes)
+bindkey '^[[A' history-substring-search-up
+bindkey '^[[B' history-substring-search-down
+
+# Vi mode: use jk to escape to command mode (faster than reaching for ESC)
+bindkey -M viins 'jk' vi-cmd-mode
+
+# Vi command mode bindings for history search
+bindkey -M vicmd 'k' history-substring-search-up
+bindkey -M vicmd 'j' history-substring-search-down
+bindkey -M vicmd '/' history-incremental-search-backward
+bindkey -M vicmd '?' history-incremental-search-forward
+
+# Better backspace/delete behavior in insert mode
+bindkey -M viins '^?' backward-delete-char        # Backspace works
+bindkey -M viins '^H' backward-delete-char        # Ctrl+H backspace
 
 # ============================================================================
 # Claude MCP Configuration
