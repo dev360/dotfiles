@@ -12,6 +12,8 @@ fi
 
 # Parse args
 RESUME_MODE=false
+PROMPT=""
+AGENT=""
 CLAUDE_ARGS=""
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -19,12 +21,25 @@ while [[ $# -gt 0 ]]; do
             RESUME_MODE=true
             shift
             ;;
+        --prompt)
+            PROMPT="$2"
+            shift 2
+            ;;
+        --agent)
+            AGENT="$2"
+            shift 2
+            ;;
         *)
             CLAUDE_ARGS="$CLAUDE_ARGS $1"
             shift
             ;;
     esac
 done
+
+# Add agent to claude args if specified
+if [[ -n "$AGENT" ]]; then
+    CLAUDE_ARGS="$CLAUDE_ARGS --agent $AGENT"
+fi
 
 # Create a temp layout file for this session
 LAYOUT_FILE="/tmp/claude-${SESSION_NAME}.kdl"
@@ -34,6 +49,14 @@ if [[ "$RESUME_MODE" == "true" ]]; then
 else
     INIT_CMD="/clear"
     RENAME_CMD="/rename ${SESSION_NAME}"
+    # Escape single quotes in prompt for bash -c string
+    ESCAPED_PROMPT="$(echo "$PROMPT" | sed "s/'/'\\\\''/g")"
+fi
+
+# Build the prompt command if we have one (only in clear mode)
+PROMPT_CMD=""
+if [[ "$RESUME_MODE" != "true" && -n "$PROMPT" ]]; then
+    PROMPT_CMD=" && sleep 0.5 && zellij action write-chars '${ESCAPED_PROMPT}' && zellij action write 13"
 fi
 
 # Generate layout that runs claude with auto-init (no UI for nested session)
@@ -44,7 +67,7 @@ layout {
     }
     pane borderless=true {
         command "bash"
-        args "-c" "(sleep 2 && zellij action write-chars '${INIT_CMD}' && zellij action write 13${RENAME_CMD:+ && sleep 0.5 && zellij action write-chars '${RENAME_CMD}' && zellij action write 13}) & exec claude ${CLAUDE_ARGS}"
+        args "-c" "(sleep 2 && zellij action write-chars '${INIT_CMD}' && zellij action write 13${RENAME_CMD:+ && sleep 0.5 && zellij action write-chars '${RENAME_CMD}' && zellij action write 13}${PROMPT_CMD}) & exec claude ${CLAUDE_ARGS}"
     }
 }
 EOF
