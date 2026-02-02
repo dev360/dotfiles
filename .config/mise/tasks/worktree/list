@@ -3,8 +3,16 @@
 #MISE usage="worktree:list"
 set -euo pipefail
 
-# Find the project root (parent of main/ directory)
-find_project_root() {
+# Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
+ORIGINAL_CWD="${MISE_ORIGINAL_CWD:-$PWD}"
+cd "$ORIGINAL_CWD"
+
+# Detect project structure (main/ structure or regular repo)
+MODE=""
+ROOT_DIR=""
+MAIN_REPO=""
+
+find_main_structure() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
         if [[ -d "$dir/main/.git" ]]; then
@@ -21,17 +29,38 @@ find_project_root() {
     return 1
 }
 
-ROOT_DIR="$(find_project_root)" || {
-    echo "Error: Could not find project root with main/ directory"
-    echo "Expected structure:"
-    echo "  project-root/"
-    echo "    ├── main/      # Main git repository"
-    echo "    ├── feature-1/ # Worktree"
-    echo "    └── feature-2/ # Worktree"
-    exit 1
-}
+if ROOT_DIR="$(find_main_structure)"; then
+    MODE="main-structure"
+    MAIN_REPO="$ROOT_DIR/main"
+else
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "Error: Not in a git repository"
+        exit 1
+    }
 
-MAIN_REPO="$ROOT_DIR/main"
+    if [[ -f "$GIT_ROOT/.git" ]]; then
+        # This is a worktree - find the main repo
+        MAIN_REPO="$(git -C "$GIT_ROOT" rev-parse --git-common-dir 2>/dev/null | sed 's/\.git$//' | sed 's/\/$//')"
+        if [[ -z "$MAIN_REPO" || ! -d "$MAIN_REPO" ]]; then
+            MAIN_REPO="$(cat "$GIT_ROOT/.git" | sed 's/gitdir: //' | sed 's/\.git\/worktrees.*//')"
+        fi
+        ROOT_DIR="$(dirname "$MAIN_REPO")"
+    else
+        MAIN_REPO="$GIT_ROOT"
+        ROOT_DIR="$(dirname "$GIT_ROOT")"
+    fi
+    MODE="regular-repo"
+fi
+
+# Detect default branch (main or master)
+DEFAULT_BRANCH=""
+if git -C "$MAIN_REPO" show-ref --verify --quiet "refs/heads/main" 2>/dev/null; then
+    DEFAULT_BRANCH="main"
+elif git -C "$MAIN_REPO" show-ref --verify --quiet "refs/heads/master" 2>/dev/null; then
+    DEFAULT_BRANCH="master"
+else
+    DEFAULT_BRANCH="$(git -C "$MAIN_REPO" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || DEFAULT_BRANCH="main"
+fi
 
 # Colors (if terminal supports it)
 if [[ -t 1 ]]; then
@@ -87,7 +116,7 @@ print_worktree_status() {
     else
         # No upstream - check commits ahead of main
         if [[ "$is_main" != "true" ]]; then
-            local ahead=$(git -C "$MAIN_REPO" rev-list "main..$branch" --count 2>/dev/null || echo "0")
+            local ahead=$(git -C "$MAIN_REPO" rev-list "$DEFAULT_BRANCH..$branch" --count 2>/dev/null || echo "0")
             if [[ "$ahead" -gt 0 ]]; then
                 status_flags+="${YELLOW}[${ahead} ahead, no upstream]${NC} "
             fi
@@ -96,7 +125,7 @@ print_worktree_status() {
 
     # Check if merged to main
     if [[ "$is_main" != "true" ]]; then
-        if git -C "$MAIN_REPO" branch --merged main 2>/dev/null | grep -q "^\s*$branch$"; then
+        if git -C "$MAIN_REPO" branch --merged "$DEFAULT_BRANCH" 2>/dev/null | grep -q "^\s*$branch$"; then
             status_flags+="${GREEN}[merged]${NC} "
         fi
     fi

@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+# Wrapper script to start Claude with auto /clear + /rename or /resume
+# Usage: claude-init <session-name> [--resume] [claude-args...]
+
+SESSION_NAME="${1:-}"
+shift
+
+if [[ -z "$SESSION_NAME" ]]; then
+    echo "Usage: claude-init <session-name> [--resume] [claude-args...]"
+    exit 1
+fi
+
+# Check for --resume flag
+RESUME_MODE=false
+CLAUDE_ARGS=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --resume)
+            RESUME_MODE=true
+            shift
+            ;;
+        *)
+            CLAUDE_ARGS="$CLAUDE_ARGS $1"
+            shift
+            ;;
+    esac
+done
+
+# Background process to send commands after Claude starts
+(
+    sleep 2
+    if [[ "$RESUME_MODE" == "true" ]]; then
+        # Resume mode: just send /resume
+        zellij action write-chars "/resume ${SESSION_NAME}"
+        zellij action write 13
+    else
+        # Normal mode: /clear then /rename
+        zellij action write-chars "/clear"
+        zellij action write 13
+        sleep 0.5
+        zellij action write-chars "/rename ${SESSION_NAME}"
+        zellij action write 13
+    fi
+) &
+
+# Start Claude (exec replaces this shell)
+exec claude $CLAUDE_ARGS

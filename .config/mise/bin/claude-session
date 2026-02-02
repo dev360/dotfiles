@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+# Starts a nested zellij session with Claude
+# Usage: claude-session <session-name> [--resume] [claude-args...]
+
+SESSION_NAME="${1:-}"
+shift
+
+if [[ -z "$SESSION_NAME" ]]; then
+    echo "Usage: claude-session <session-name> [--resume] [claude-args...]"
+    exit 1
+fi
+
+# Parse args
+RESUME_MODE=false
+CLAUDE_ARGS=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --resume)
+            RESUME_MODE=true
+            shift
+            ;;
+        *)
+            CLAUDE_ARGS="$CLAUDE_ARGS $1"
+            shift
+            ;;
+    esac
+done
+
+# Create a temp layout file for this session
+LAYOUT_FILE="/tmp/claude-${SESSION_NAME}.kdl"
+
+if [[ "$RESUME_MODE" == "true" ]]; then
+    INIT_CMD="/resume ${SESSION_NAME}"
+else
+    INIT_CMD="/clear"
+    RENAME_CMD="/rename ${SESSION_NAME}"
+fi
+
+# Generate layout that runs claude with auto-init (no UI for nested session)
+cat > "$LAYOUT_FILE" << EOF
+layout {
+    default_tab_template {
+        children
+    }
+    pane borderless=true {
+        command "bash"
+        args "-c" "(sleep 2 && zellij action write-chars '${INIT_CMD}' && zellij action write 13${RENAME_CMD:+ && sleep 0.5 && zellij action write-chars '${RENAME_CMD}' && zellij action write 13}) & exec claude ${CLAUDE_ARGS}"
+    }
+}
+EOF
+
+# Attach to existing session, or create new with layout if it doesn't exist
+# First try to attach (will succeed if session exists)
+zellij a "$SESSION_NAME" 2>/dev/null && exit 0
+
+# Session doesn't exist - create new with layout
+exec zellij --new-session-with-layout "$LAYOUT_FILE" -s "$SESSION_NAME"

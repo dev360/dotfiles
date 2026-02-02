@@ -3,6 +3,10 @@
 #MISE usage="worktree:new <branch> [-p <prefix>]"
 set -euo pipefail
 
+# Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
+ORIGINAL_CWD="${MISE_ORIGINAL_CWD:-$PWD}"
+cd "$ORIGINAL_CWD"
+
 # Parse arguments
 BRANCH=""
 PREFIX=""
@@ -29,21 +33,28 @@ if [[ -z "$BRANCH" ]]; then
     echo "Usage: mise worktree:new <branch-name> [-p <prefix>]"
     echo ""
     echo "Examples:"
-    echo "  mise worktree:new feat/FLO-123           # Creates flo-123/"
+    echo "  mise worktree:new feat/FLO-123           # Creates <repo>-flo-123/"
     echo "  mise worktree:new feat/FLO-123 -p ui    # Creates ui-flo-123/"
     exit 1
 fi
 
-# Find the project root (parent of main/ directory)
-find_project_root() {
+# Try to find project structure
+# Mode 1: Worktree structure with main/ directory
+# Mode 2: Regular git repo (worktrees as siblings)
+
+MODE=""
+ROOT_DIR=""
+MAIN_REPO=""
+AUTO_PREFIX=""
+
+# Check for main/ structure first
+find_main_structure() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
-        # Check if we're in a worktree structure (sibling to main/)
         if [[ -d "$dir/main/.git" ]]; then
             echo "$dir"
             return 0
         fi
-        # Check if parent has main/ sibling
         local parent="$(dirname "$dir")"
         if [[ -d "$parent/main/.git" ]]; then
             echo "$parent"
@@ -54,17 +65,25 @@ find_project_root() {
     return 1
 }
 
-ROOT_DIR="$(find_project_root)" || {
-    echo "Error: Could not find project root with main/ directory"
-    echo "Expected structure:"
-    echo "  project-root/"
-    echo "    ├── main/      # Main git repository"
-    echo "    ├── feature-1/ # Worktree"
-    echo "    └── feature-2/ # Worktree"
-    exit 1
-}
+if ROOT_DIR="$(find_main_structure)"; then
+    MODE="main-structure"
+    MAIN_REPO="$ROOT_DIR/main"
+else
+    # Check if we're in a regular git repo
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "Error: Not in a git repository"
+        exit 1
+    }
 
-MAIN_REPO="$ROOT_DIR/main"
+    MODE="regular-repo"
+    MAIN_REPO="$GIT_ROOT"
+    ROOT_DIR="$(dirname "$GIT_ROOT")"
+    AUTO_PREFIX="$(basename "$GIT_ROOT" | tr '[:upper:]' '[:lower:]')"
+
+    echo "Detected regular git repo: $GIT_ROOT"
+    echo "Worktrees will be created as siblings with '$AUTO_PREFIX-' prefix"
+    echo ""
+fi
 
 cd "$MAIN_REPO"
 
@@ -74,10 +93,13 @@ DIR_NAME=$(echo "$BRANCH" | sed -E 's/^(feat|fix|bug|chore|docs|style|refactor|p
 # Convert to lowercase for directory name
 DIR_NAME=$(echo "$DIR_NAME" | tr '[:upper:]' '[:lower:]')
 
-# Add prefix if provided
+# Determine final prefix
+# Priority: explicit -p flag > auto-prefix from repo name
 if [[ -n "$PREFIX" ]]; then
     PREFIX=$(echo "$PREFIX" | tr '[:upper:]' '[:lower:]')
     DIR_NAME="${PREFIX}-${DIR_NAME}"
+elif [[ -n "$AUTO_PREFIX" ]]; then
+    DIR_NAME="${AUTO_PREFIX}-${DIR_NAME}"
 fi
 
 WORKTREE_PATH="$ROOT_DIR/$DIR_NAME"
@@ -92,6 +114,16 @@ fi
 echo "Fetching latest from origin..."
 git fetch origin
 
+# Determine the default branch (main or master)
+DEFAULT_BRANCH=""
+if git show-ref --verify --quiet "refs/remotes/origin/main" 2>/dev/null; then
+    DEFAULT_BRANCH="main"
+elif git show-ref --verify --quiet "refs/remotes/origin/master" 2>/dev/null; then
+    DEFAULT_BRANCH="master"
+else
+    DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || DEFAULT_BRANCH="main"
+fi
+
 # Check if branch exists (locally or remotely)
 BRANCH_EXISTS=false
 if git show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null; then
@@ -102,26 +134,31 @@ elif git show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; th
     echo "Branch '$BRANCH' exists on remote"
 fi
 
-# Create branch from main if it doesn't exist
+# Create branch from default branch if it doesn't exist
 if [[ "$BRANCH_EXISTS" == "false" ]]; then
-    echo "Creating branch '$BRANCH' from main..."
-    git branch "$BRANCH" origin/main
+    echo "Creating branch '$BRANCH' from origin/$DEFAULT_BRANCH..."
+    git branch "$BRANCH" "origin/$DEFAULT_BRANCH"
 fi
 
 # Create the worktree
 echo "Creating worktree at $WORKTREE_PATH..."
 git worktree add "$WORKTREE_PATH" "$BRANCH"
 
-# Copy mise config to the new worktree if it exists in main
+# Copy mise config to the new worktree if it exists
 if [[ -d "$MAIN_REPO/.mise" ]]; then
     echo "Copying mise configuration..."
     cp -r "$MAIN_REPO/.mise" "$WORKTREE_PATH/.mise"
 fi
 
 echo ""
-echo "Worktree created successfully!"
-echo "  Branch: $BRANCH"
-echo "  Path: $WORKTREE_PATH"
+echo "=========================================="
+echo "  Worktree Created Successfully"
+echo "=========================================="
 echo ""
-echo "To start development with Claude, run:"
-echo "  mise worktree:dev $BRANCH"
+echo "  Branch: $BRANCH"
+echo "  Path:   $WORKTREE_PATH"
+echo ""
+echo "To start development with Claude:"
+echo "  cd $WORKTREE_PATH && mise worktree:dev"
+echo ""
+echo "=========================================="

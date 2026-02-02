@@ -334,6 +334,21 @@ install_cli_utilities() {
 
     # Shell history
     install_package "atuin" "atuin" "atuin"
+
+    # Task runner / dev tool manager
+    install_package "mise" "mise" "mise"
+
+    # AI coding assistant (requires Node.js)
+    if ! command_exists claude; then
+        if command_exists npm; then
+            print_header "Installing Claude Code"
+            npm install -g @anthropic-ai/claude-code || print_warning "Failed to install Claude Code"
+        else
+            print_warning "Skipping Claude Code (npm not found - run 'nvm install --lts' first)"
+        fi
+    else
+        print_success "Claude Code already installed"
+    fi
 }
 
 # ============================================================================
@@ -403,6 +418,17 @@ setup_dotfiles() {
                 ln -sf "$task_file" "$target_file"
                 print_success "Symlinked mise task: $rel_path"
             fi
+        done
+    fi
+
+    # Mise bin scripts (symlink individual scripts)
+    if [ -d "$DOTFILES_DIR/.config/mise/bin" ]; then
+        mkdir -p "$HOME/.config/mise/bin"
+        find "$DOTFILES_DIR/.config/mise/bin" -type f -executable | while read -r bin_file; do
+            bin_name="$(basename "$bin_file")"
+            target_file="$HOME/.config/mise/bin/$bin_name"
+            ln -sf "$bin_file" "$target_file"
+            print_success "Symlinked mise bin: $bin_name"
         done
     fi
 

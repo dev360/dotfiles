@@ -3,6 +3,10 @@
 #MISE usage="worktree:delete [target] [-f] [--keep-branch] [-y]"
 set -euo pipefail
 
+# Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
+ORIGINAL_CWD="${MISE_ORIGINAL_CWD:-$PWD}"
+cd "$ORIGINAL_CWD"
+
 # Parse arguments manually for flexibility
 TARGET=""
 FORCE="false"
@@ -34,8 +38,12 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Find the project root (parent of main/ directory)
-find_project_root() {
+# Detect project structure (main/ structure or regular repo)
+MODE=""
+ROOT_DIR=""
+MAIN_REPO=""
+
+find_main_structure() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
         if [[ -d "$dir/main/.git" ]]; then
@@ -52,13 +60,42 @@ find_project_root() {
     return 1
 }
 
-ROOT_DIR="$(find_project_root)" || {
-    echo "Error: Could not find project root with main/ directory"
-    exit 1
-}
+if ROOT_DIR="$(find_main_structure)"; then
+    MODE="main-structure"
+    MAIN_REPO="$ROOT_DIR/main"
+else
+    # Check if we're in a git repo or worktree
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "Error: Not in a git repository"
+        exit 1
+    }
 
-MAIN_REPO="$ROOT_DIR/main"
+    # Check if this is a worktree by looking for .git file (not directory)
+    if [[ -f "$GIT_ROOT/.git" ]]; then
+        # This is a worktree - find the main repo
+        MAIN_REPO="$(git -C "$GIT_ROOT" rev-parse --git-common-dir 2>/dev/null | sed 's/\.git$//' | sed 's/\/$//')"
+        if [[ -z "$MAIN_REPO" || ! -d "$MAIN_REPO" ]]; then
+            MAIN_REPO="$(cat "$GIT_ROOT/.git" | sed 's/gitdir: //' | sed 's/\.git\/worktrees.*//')"
+        fi
+        ROOT_DIR="$(dirname "$MAIN_REPO")"
+    else
+        # This is a regular repo
+        MAIN_REPO="$GIT_ROOT"
+        ROOT_DIR="$(dirname "$GIT_ROOT")"
+    fi
+    MODE="regular-repo"
+fi
 CURRENT_DIR="$(pwd)"
+
+# Detect default branch (main or master)
+DEFAULT_BRANCH=""
+if git -C "$MAIN_REPO" show-ref --verify --quiet "refs/heads/main" 2>/dev/null; then
+    DEFAULT_BRANCH="main"
+elif git -C "$MAIN_REPO" show-ref --verify --quiet "refs/heads/master" 2>/dev/null; then
+    DEFAULT_BRANCH="master"
+else
+    DEFAULT_BRANCH="$(git -C "$MAIN_REPO" symbolic-ref refs/remotes/origin/HEAD 2>/dev/null | sed 's@^refs/remotes/origin/@@')" || DEFAULT_BRANCH="main"
+fi
 
 # Function to normalize branch name to directory name
 branch_to_dir() {
@@ -181,9 +218,9 @@ if [[ -n "$UPSTREAM" ]]; then
     fi
 else
     # No upstream, check if there are any commits not in main
-    UNPUSHED=$(git -C "$MAIN_REPO" log "main..$BRANCH" --oneline 2>/dev/null || true)
+    UNPUSHED=$(git -C "$MAIN_REPO" log "$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
     if [[ -n "$UNPUSHED" ]]; then
-        echo "Warning: Branch has commits not in main (and no upstream set):"
+        echo "Warning: Branch has commits not in $DEFAULT_BRANCH (and no upstream set):"
         echo "$UNPUSHED"
         echo ""
         if [[ "$FORCE" != "true" ]]; then
@@ -197,10 +234,10 @@ fi
 
 # SAFETY CHECK 3: Not merged to main
 cd "$MAIN_REPO"
-git fetch origin main:main 2>/dev/null || true
+git fetch origin "$DEFAULT_BRANCH:$DEFAULT_BRANCH" 2>/dev/null || true
 
-if ! git branch --merged main | grep -q "^\s*$BRANCH$"; then
-    echo "Warning: Branch '$BRANCH' is not merged to main"
+if ! git branch --merged "$DEFAULT_BRANCH" | grep -q "^\s*$BRANCH$"; then
+    echo "Warning: Branch '$BRANCH' is not merged to $DEFAULT_BRANCH"
     echo ""
     if [[ "$FORCE" != "true" ]]; then
         echo "Use -f to force delete anyway."

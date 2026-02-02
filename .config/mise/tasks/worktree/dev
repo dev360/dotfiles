@@ -1,12 +1,54 @@
 #!/usr/bin/env bash
-#MISE description="Start a Claude development session in a worktree with two Claude windows"
-#MISE usage="worktree:dev [branch-or-dir]"
+#MISE description="Start a Claude development session in a worktree"
+#MISE usage="worktree:dev [branch-or-dir] [--orchestrator]"
 set -euo pipefail
 
-TARGET="${1:-}"
+# Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
+ORIGINAL_CWD="${MISE_ORIGINAL_CWD:-$PWD}"
+cd "$ORIGINAL_CWD"
 
-# Find the project root (parent of main/ directory)
-find_project_root() {
+# Parse arguments
+TARGET=""
+ORCHESTRATOR=false
+DANGEROUS=false
+WITH_VIM=false
+RESUME=false
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --orchestrator)
+            ORCHESTRATOR=true
+            shift
+            ;;
+        --dangerous)
+            DANGEROUS=true
+            shift
+            ;;
+        --vim)
+            WITH_VIM=true
+            shift
+            ;;
+        --resume)
+            RESUME=true
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+# Detect project structure (main/ structure or regular repo)
+MODE=""
+ROOT_DIR=""
+MAIN_REPO=""
+
+find_main_structure() {
     local dir="$PWD"
     while [[ "$dir" != "/" ]]; do
         if [[ -d "$dir/main/.git" ]]; then
@@ -23,12 +65,28 @@ find_project_root() {
     return 1
 }
 
-ROOT_DIR="$(find_project_root)" || {
-    echo "Error: Could not find project root with main/ directory"
-    exit 1
-}
+if ROOT_DIR="$(find_main_structure)"; then
+    MODE="main-structure"
+    MAIN_REPO="$ROOT_DIR/main"
+else
+    GIT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
+        echo "Error: Not in a git repository"
+        exit 1
+    }
 
-MAIN_REPO="$ROOT_DIR/main"
+    if [[ -f "$GIT_ROOT/.git" ]]; then
+        # This is a worktree - find the main repo
+        MAIN_REPO="$(git -C "$GIT_ROOT" rev-parse --git-common-dir 2>/dev/null | sed 's/\.git$//' | sed 's/\/$//')"
+        if [[ -z "$MAIN_REPO" || ! -d "$MAIN_REPO" ]]; then
+            MAIN_REPO="$(cat "$GIT_ROOT/.git" | sed 's/gitdir: //' | sed 's/\.git\/worktrees.*//')"
+        fi
+        ROOT_DIR="$(dirname "$MAIN_REPO")"
+    else
+        MAIN_REPO="$GIT_ROOT"
+        ROOT_DIR="$(dirname "$GIT_ROOT")"
+    fi
+    MODE="regular-repo"
+fi
 
 # Function to normalize branch name to directory name
 branch_to_dir() {
@@ -104,63 +162,197 @@ resolve_target "$TARGET" || exit 1
 DIR_NAME="$(basename "$WORKTREE_PATH")"
 BRANCH="$(get_worktree_branch "$WORKTREE_PATH")"
 
-# Create a session name from the directory
-SESSION_NAME="claude-$DIR_NAME"
+# Sanitize branch name for use in pane names (replace / with -)
+BRANCH_SAFE="$(echo "$BRANCH" | tr '/' '-')"
 
-# Check if session already exists
-if command -v zellij &>/dev/null; then
-    if zellij list-sessions 2>/dev/null | grep -q "^$SESSION_NAME"; then
-        echo "Session '$SESSION_NAME' already exists."
-        echo "Attaching to existing session..."
-        zellij attach "$SESSION_NAME"
-        exit 0
-    fi
+# Store layouts in ~/.config/mise/layouts/ (not in worktree)
+LAYOUTS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mise/layouts"
+mkdir -p "$LAYOUTS_DIR"
+LAYOUT_FILE="$LAYOUTS_DIR/${DIR_NAME}.kdl"
+
+# Build extra args for KDL (must be quoted)
+EXTRA_ARGS=""
+if [[ "$RESUME" == "true" ]]; then
+    EXTRA_ARGS="${EXTRA_ARGS} \"--resume\""
+fi
+if [[ "$DANGEROUS" == "true" ]]; then
+    EXTRA_ARGS="${EXTRA_ARGS} \"--dangerously-skip-permissions\""
 fi
 
-# Generate the layout KDL for this worktree
-LAYOUT_FILE="$WORKTREE_PATH/.claude-layout.kdl"
+# Path to wrapper script (spawns nested zellij session)
+CLAUDE_SESSION="${XDG_CONFIG_HOME:-$HOME/.config}/mise/bin/claude-session"
 
-cat > "$LAYOUT_FILE" << EOF
-// Auto-generated Claude development layout for $BRANCH
-// Two side-by-side Claude sessions
+# Tab names (keep short - branch context is in session name)
+VIM_TAB_NAME="vim"
+CLAUDE_TAB_NAME="claude"
+
+# Generate the layout KDL based on mode
+if [[ "$WITH_VIM" == "true" ]]; then
+    # Two tabs: vim + claude
+    if [[ "$ORCHESTRATOR" == "true" ]]; then
+        PANE1_NAME="claude-${BRANCH_SAFE}"
+        PANE2_NAME="claude-${BRANCH_SAFE}-orchestrator"
+
+        cat > "$LAYOUT_FILE" << EOF
+// Claude Development Layout (Vim + Orchestrator Mode)
+// Worktree: ${DIR_NAME}
+// Branch: ${BRANCH}
+
 layout {
     default_tab_template {
         pane size=1 borderless=true {
-            plugin location="tab-bar"
+            plugin location="zellij:tab-bar"
         }
         children
         pane size=2 borderless=true {
-            plugin location="status-bar"
+            plugin location="zellij:status-bar"
         }
     }
 
-    tab name="claude" {
+    tab name="${VIM_TAB_NAME}" {
+        pane {
+            cwd "${WORKTREE_PATH}"
+            command "nvim"
+        }
+    }
+
+    tab name="${CLAUDE_TAB_NAME}" {
         pane split_direction="vertical" {
-            pane command="claude" {
-                args "--dangerously-skip-permissions"
-                cwd "$WORKTREE_PATH"
+            pane name="${PANE1_NAME}" {
+                cwd "${WORKTREE_PATH}"
+                command "${CLAUDE_SESSION}"
+                args "${PANE1_NAME}" ${EXTRA_ARGS}
             }
-            pane command="claude" {
-                args "--dangerously-skip-permissions"
-                cwd "$WORKTREE_PATH"
+            pane name="${PANE2_NAME}" {
+                cwd "${WORKTREE_PATH}"
+                command "${CLAUDE_SESSION}"
+                args "${PANE2_NAME}" ${EXTRA_ARGS}
             }
         }
     }
 }
 EOF
+        PANE_INFO="Vim + Two Claude instances (orchestrator)"
+    else
+        PANE_NAME="claude-${BRANCH_SAFE}"
 
+        cat > "$LAYOUT_FILE" << EOF
+// Claude Development Layout (Vim Mode)
+// Worktree: ${DIR_NAME}
+// Branch: ${BRANCH}
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="${VIM_TAB_NAME}" {
+        pane {
+            cwd "${WORKTREE_PATH}"
+            command "nvim"
+        }
+    }
+
+    tab name="${CLAUDE_TAB_NAME}" {
+        pane name="${PANE_NAME}" {
+            cwd "${WORKTREE_PATH}"
+            command "${CLAUDE_SESSION}"
+            args "${PANE_NAME}" ${EXTRA_ARGS}
+        }
+    }
+}
+EOF
+        PANE_INFO="Vim + Single Claude instance"
+    fi
+else
+    # No vim - just claude tab(s)
+    if [[ "$ORCHESTRATOR" == "true" ]]; then
+        PANE1_NAME="claude-${BRANCH_SAFE}"
+        PANE2_NAME="claude-${BRANCH_SAFE}-orchestrator"
+
+        cat > "$LAYOUT_FILE" << EOF
+// Claude Development Layout (Orchestrator Mode)
+// Worktree: ${DIR_NAME}
+// Branch: ${BRANCH}
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="${CLAUDE_TAB_NAME}" {
+        pane split_direction="vertical" {
+            pane name="${PANE1_NAME}" {
+                cwd "${WORKTREE_PATH}"
+                command "${CLAUDE_SESSION}"
+                args "${PANE1_NAME}" ${EXTRA_ARGS}
+            }
+            pane name="${PANE2_NAME}" {
+                cwd "${WORKTREE_PATH}"
+                command "${CLAUDE_SESSION}"
+                args "${PANE2_NAME}" ${EXTRA_ARGS}
+            }
+        }
+    }
+}
+EOF
+        PANE_INFO="Two Claude instances (implementer + orchestrator)"
+    else
+        PANE_NAME="claude-${BRANCH_SAFE}"
+
+        cat > "$LAYOUT_FILE" << EOF
+// Claude Development Layout
+// Worktree: ${DIR_NAME}
+// Branch: ${BRANCH}
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="${CLAUDE_TAB_NAME}" {
+        pane name="${PANE_NAME}" {
+            cwd "${WORKTREE_PATH}"
+            command "${CLAUDE_SESSION}"
+            args "${PANE_NAME}" ${EXTRA_ARGS}
+        }
+    }
+}
+EOF
+        PANE_INFO="Single Claude instance"
+    fi
+fi
+
+echo "=========================================="
+echo "  Claude Worktree Development"
+echo "=========================================="
+echo ""
 echo "Worktree: $WORKTREE_PATH"
 echo "Branch:   $BRANCH"
-echo "Session:  $SESSION_NAME"
+echo "Mode:     $PANE_INFO"
 echo ""
-echo "Starting Claude development session..."
+echo "Press Ctrl+O then 'd' to detach from Zellij"
+echo ""
+echo "=========================================="
+echo ""
 
-# Check if we're already inside zellij
-if [[ -n "${ZELLIJ:-}" ]]; then
-    echo "Detected existing Zellij session."
-    echo "Running nested Zellij with layout..."
-    echo ""
-    ZELLIJ_FORCE_ATTACH=true zellij --layout "$LAYOUT_FILE" --session "$SESSION_NAME"
-else
-    zellij --layout "$LAYOUT_FILE" --session "$SESSION_NAME"
-fi
+# Launch with the layout
+zellij --layout "$LAYOUT_FILE"
