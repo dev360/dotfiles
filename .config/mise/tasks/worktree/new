@@ -1,0 +1,77 @@
+#!/usr/bin/env bash
+#MISE description="Create a new git worktree with optional branch creation"
+#MISE usage="worktree:new <branch-name>"
+#MISE arg="branch"
+set -euo pipefail
+
+BRANCH="$1"
+
+if [[ -z "$BRANCH" ]]; then
+    echo "Error: Branch name is required"
+    echo "Usage: mise worktree:new <branch-name>"
+    exit 1
+fi
+
+# Get the root directory (where .mise.toml lives)
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+MAIN_REPO="$ROOT_DIR/main"
+
+# Validate main repo exists
+if [[ ! -d "$MAIN_REPO/.git" ]]; then
+    echo "Error: Main repository not found at $MAIN_REPO"
+    exit 1
+fi
+
+cd "$MAIN_REPO"
+
+# Strip semantic commit prefixes for directory name
+# Supports: feat/, fix/, bug/, chore/, docs/, style/, refactor/, perf/, test/, build/, ci/
+DIR_NAME=$(echo "$BRANCH" | sed -E 's/^(feat|fix|bug|chore|docs|style|refactor|perf|test|build|ci)\///')
+# Convert to lowercase for directory name
+DIR_NAME=$(echo "$DIR_NAME" | tr '[:upper:]' '[:lower:]')
+
+WORKTREE_PATH="$ROOT_DIR/$DIR_NAME"
+
+# Check if worktree already exists
+if [[ -d "$WORKTREE_PATH" ]]; then
+    echo "Error: Worktree directory already exists at $WORKTREE_PATH"
+    exit 1
+fi
+
+# Fetch latest from origin to ensure we have branch info
+echo "Fetching latest from origin..."
+git fetch origin
+
+# Check if branch exists (locally or remotely)
+BRANCH_EXISTS=false
+if git show-ref --verify --quiet "refs/heads/$BRANCH" 2>/dev/null; then
+    BRANCH_EXISTS=true
+    echo "Branch '$BRANCH' exists locally"
+elif git show-ref --verify --quiet "refs/remotes/origin/$BRANCH" 2>/dev/null; then
+    BRANCH_EXISTS=true
+    echo "Branch '$BRANCH' exists on remote"
+fi
+
+# Create branch from main if it doesn't exist
+if [[ "$BRANCH_EXISTS" == "false" ]]; then
+    echo "Creating branch '$BRANCH' from main..."
+    git branch "$BRANCH" origin/main
+fi
+
+# Create the worktree
+echo "Creating worktree at $WORKTREE_PATH..."
+git worktree add "$WORKTREE_PATH" "$BRANCH"
+
+# Copy mise config to the new worktree
+if [[ -d "$MAIN_REPO/.mise" ]]; then
+    echo "Copying mise configuration..."
+    cp -r "$MAIN_REPO/.mise" "$WORKTREE_PATH/.mise"
+fi
+
+echo ""
+echo "Worktree created successfully!"
+echo "  Branch: $BRANCH"
+echo "  Path: $WORKTREE_PATH"
+echo ""
+echo "To start development with Claude, run:"
+echo "  mise worktree:dev $BRANCH"

@@ -1,4 +1,4 @@
-if true then return {} end -- WARN: REMOVE THIS LINE TO ACTIVATE THIS FILE
+-- if true then return {} end -- WARN: REMOVE THIS LINE TO ACTIVATE THIS FILE
 
 -- AstroLSP allows you to customize the features in AstroNvim's LSP configuration engine
 -- Configuration documentation can be found with `:h astrolsp`
@@ -45,6 +45,14 @@ return {
     ---@diagnostic disable: missing-fields
     config = {
       -- clangd = { capabilities = { offsetEncoding = "utf-8" } },
+      gopls = {
+        -- The cmd will automatically search your shell's $PATH for 'gopls'
+        cmd = { "/Users/ctoivola/go/bin/gopls" },
+        -- Ensure it attaches to Go filetypes
+        filetypes = { "go", "gomod" },
+        -- This tells nvim-lspconfig where to look for the project root
+        root_dir = require("lspconfig.util").root_pattern("go.work", "go.mod", ".git"),
+      },
     },
     -- customize how language servers are attached
     handlers = {

@@ -26,6 +26,13 @@ vim.api.nvim_create_autocmd("FileType", {
   end,
 })
 
+vim.filetype.add({
+  extension = {
+    gts = 'typescript.glimmer',
+    gjs = 'typescript.glimmer',
+  }
+})
+
 
 require "lazy_setup"
 require "polish"
