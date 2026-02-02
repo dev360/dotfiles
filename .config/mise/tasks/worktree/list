@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+#MISE description="List all git worktrees with status information"
+#MISE usage="worktree:list"
+set -euo pipefail
+
+# Find the project root (parent of main/ directory)
+find_project_root() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -d "$dir/main/.git" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        local parent="$(dirname "$dir")"
+        if [[ -d "$parent/main/.git" ]]; then
+            echo "$parent"
+            return 0
+        fi
+        dir="$parent"
+    done
+    return 1
+}
+
+ROOT_DIR="$(find_project_root)" || {
+    echo "Error: Could not find project root with main/ directory"
+    echo "Expected structure:"
+    echo "  project-root/"
+    echo "    ├── main/      # Main git repository"
+    echo "    ├── feature-1/ # Worktree"
+    echo "    └── feature-2/ # Worktree"
+    exit 1
+}
+
+MAIN_REPO="$ROOT_DIR/main"
+
+# Colors (if terminal supports it)
+if [[ -t 1 ]]; then
+    RED='\033[0;31m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[0;33m'
+    BLUE='\033[0;34m'
+    CYAN='\033[0;36m'
+    BOLD='\033[1m'
+    NC='\033[0m' # No Color
+else
+    RED=''
+    GREEN=''
+    YELLOW=''
+    BLUE=''
+    CYAN=''
+    BOLD=''
+    NC=''
+fi
+
+# Fetch to ensure we have latest remote info
+git -C "$MAIN_REPO" fetch origin --quiet 2>/dev/null || true
+
+echo -e "${BOLD}Worktrees in $ROOT_DIR${NC}"
+echo ""
+
+# Parse worktree list
+current_wt=""
+current_branch=""
+worktree_count=0
+
+print_worktree_status() {
+    local wt_path="$1"
+    local branch="$2"
+    local is_main="$3"
+
+    local dir_name="$(basename "$wt_path")"
+    local status_flags=""
+
+    # Check for uncommitted changes
+    local changes="$(git -C "$wt_path" status --porcelain 2>/dev/null | head -1)"
+    if [[ -n "$changes" ]]; then
+        status_flags+="${RED}[uncommitted]${NC} "
+    fi
+
+    # Check for unpushed commits
+    local upstream=$(git -C "$wt_path" rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)
+    if [[ -n "$upstream" ]]; then
+        local unpushed=$(git -C "$wt_path" rev-list '@{u}..HEAD' --count 2>/dev/null || echo "0")
+        if [[ "$unpushed" -gt 0 ]]; then
+            status_flags+="${YELLOW}[${unpushed} unpushed]${NC} "
+        fi
+    else
+        # No upstream - check commits ahead of main
+        if [[ "$is_main" != "true" ]]; then
+            local ahead=$(git -C "$MAIN_REPO" rev-list "main..$branch" --count 2>/dev/null || echo "0")
+            if [[ "$ahead" -gt 0 ]]; then
+                status_flags+="${YELLOW}[${ahead} ahead, no upstream]${NC} "
+            fi
+        fi
+    fi
+
+    # Check if merged to main
+    if [[ "$is_main" != "true" ]]; then
+        if git -C "$MAIN_REPO" branch --merged main 2>/dev/null | grep -q "^\s*$branch$"; then
+            status_flags+="${GREEN}[merged]${NC} "
+        fi
+    fi
+
+    # Check for active zellij session
+    if command -v zellij &>/dev/null; then
+        local session_name="claude-$dir_name"
+        if zellij list-sessions 2>/dev/null | grep -q "^$session_name"; then
+            status_flags+="${CYAN}[zellij]${NC} "
+        fi
+    fi
+
+    # Print the line
+    if [[ "$is_main" == "true" ]]; then
+        echo -e "  ${BOLD}${BLUE}$dir_name${NC} (main)"
+    else
+        echo -e "  ${BOLD}$dir_name${NC}"
+    fi
+    echo -e "    Branch: ${CYAN}$branch${NC}"
+    if [[ -n "$status_flags" ]]; then
+        echo -e "    Status: $status_flags"
+    fi
+    echo ""
+}
+
+# Process worktrees
+while IFS= read -r line; do
+    if [[ "$line" =~ ^worktree\ (.+) ]]; then
+        current_wt="${BASH_REMATCH[1]}"
+    elif [[ "$line" =~ ^branch\ refs/heads/(.+) ]]; then
+        current_branch="${BASH_REMATCH[1]}"
+    elif [[ -z "$line" && -n "$current_wt" ]]; then
+        # End of worktree entry
+        is_main="false"
+        if [[ "$current_wt" == "$MAIN_REPO" ]]; then
+            is_main="true"
+        fi
+        print_worktree_status "$current_wt" "$current_branch" "$is_main"
+        ((worktree_count++))
+        current_wt=""
+        current_branch=""
+    fi
+done < <(git -C "$MAIN_REPO" worktree list --porcelain; echo "")
+
+if [[ $worktree_count -eq 0 ]]; then
+    echo "  No worktrees found."
+elif [[ $worktree_count -eq 1 ]]; then
+    echo -e "${BOLD}Total: 1 worktree${NC}"
+else
+    echo -e "${BOLD}Total: $worktree_count worktrees${NC}"
+fi

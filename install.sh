@@ -377,6 +377,35 @@ setup_dotfiles() {
     ln -sf "$DOTFILES_DIR/.config/starship.toml" "$HOME/.config/starship.toml"
     print_success "Symlinked starship config"
 
+    # Mise global tasks (symlink individual tasks, don't overwrite existing)
+    if [ -d "$DOTFILES_DIR/.config/mise/tasks" ]; then
+        print_header "Installing mise global tasks"
+        mkdir -p "$HOME/.config/mise/tasks"
+
+        # Find all task files and symlink them if they don't exist
+        find "$DOTFILES_DIR/.config/mise/tasks" -type f -executable | while read -r task_file; do
+            # Get relative path from tasks directory
+            rel_path="${task_file#$DOTFILES_DIR/.config/mise/tasks/}"
+            target_dir="$HOME/.config/mise/tasks/$(dirname "$rel_path")"
+            target_file="$HOME/.config/mise/tasks/$rel_path"
+
+            mkdir -p "$target_dir"
+
+            if [ -L "$target_file" ]; then
+                # Already a symlink - update it
+                ln -sf "$task_file" "$target_file"
+                print_success "Updated symlink: mise task $rel_path"
+            elif [ -e "$target_file" ]; then
+                # File exists but not a symlink - don't overwrite
+                print_warning "Skipped mise task $rel_path (file exists, not overwriting)"
+            else
+                # Doesn't exist - create symlink
+                ln -sf "$task_file" "$target_file"
+                print_success "Symlinked mise task: $rel_path"
+            fi
+        done
+    fi
+
     # Create .zshrc.local if it doesn't exist
     if [ ! -f "$HOME/.zshrc.local" ]; then
         cp "$DOTFILES_DIR/.zshrc.local.example" "$HOME/.zshrc.local"

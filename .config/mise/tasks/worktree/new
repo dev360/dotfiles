@@ -1,26 +1,70 @@
 #!/usr/bin/env bash
 #MISE description="Create a new git worktree with optional branch creation"
-#MISE usage="worktree:new <branch-name>"
-#MISE arg="branch"
+#MISE usage="worktree:new <branch> [-p <prefix>]"
 set -euo pipefail
 
-BRANCH="$1"
+# Parse arguments
+BRANCH=""
+PREFIX=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -p|--prefix)
+            PREFIX="$2"
+            shift 2
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            BRANCH="$1"
+            shift
+            ;;
+    esac
+done
 
 if [[ -z "$BRANCH" ]]; then
     echo "Error: Branch name is required"
-    echo "Usage: mise worktree:new <branch-name>"
+    echo "Usage: mise worktree:new <branch-name> [-p <prefix>]"
+    echo ""
+    echo "Examples:"
+    echo "  mise worktree:new feat/FLO-123           # Creates flo-123/"
+    echo "  mise worktree:new feat/FLO-123 -p ui    # Creates ui-flo-123/"
     exit 1
 fi
 
-# Get the root directory (where .mise.toml lives)
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
+# Find the project root (parent of main/ directory)
+find_project_root() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        # Check if we're in a worktree structure (sibling to main/)
+        if [[ -d "$dir/main/.git" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        # Check if parent has main/ sibling
+        local parent="$(dirname "$dir")"
+        if [[ -d "$parent/main/.git" ]]; then
+            echo "$parent"
+            return 0
+        fi
+        dir="$parent"
+    done
+    return 1
+}
+
+ROOT_DIR="$(find_project_root)" || {
+    echo "Error: Could not find project root with main/ directory"
+    echo "Expected structure:"
+    echo "  project-root/"
+    echo "    ├── main/      # Main git repository"
+    echo "    ├── feature-1/ # Worktree"
+    echo "    └── feature-2/ # Worktree"
+    exit 1
+}
+
 MAIN_REPO="$ROOT_DIR/main"
-
-# Validate main repo exists
-if [[ ! -d "$MAIN_REPO/.git" ]]; then
-    echo "Error: Main repository not found at $MAIN_REPO"
-    exit 1
-fi
 
 cd "$MAIN_REPO"
 
@@ -29,6 +73,12 @@ cd "$MAIN_REPO"
 DIR_NAME=$(echo "$BRANCH" | sed -E 's/^(feat|fix|bug|chore|docs|style|refactor|perf|test|build|ci)\///')
 # Convert to lowercase for directory name
 DIR_NAME=$(echo "$DIR_NAME" | tr '[:upper:]' '[:lower:]')
+
+# Add prefix if provided
+if [[ -n "$PREFIX" ]]; then
+    PREFIX=$(echo "$PREFIX" | tr '[:upper:]' '[:lower:]')
+    DIR_NAME="${PREFIX}-${DIR_NAME}"
+fi
 
 WORKTREE_PATH="$ROOT_DIR/$DIR_NAME"
 
@@ -62,7 +112,7 @@ fi
 echo "Creating worktree at $WORKTREE_PATH..."
 git worktree add "$WORKTREE_PATH" "$BRANCH"
 
-# Copy mise config to the new worktree
+# Copy mise config to the new worktree if it exists in main
 if [[ -d "$MAIN_REPO/.mise" ]]; then
     echo "Copying mise configuration..."
     cp -r "$MAIN_REPO/.mise" "$WORKTREE_PATH/.mise"

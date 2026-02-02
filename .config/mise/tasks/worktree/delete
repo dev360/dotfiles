@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+#MISE description="Delete a git worktree with safety checks"
+#MISE usage="worktree:delete [target] [-f] [--keep-branch] [-y]"
+set -euo pipefail
+
+# Parse arguments manually for flexibility
+TARGET=""
+FORCE="false"
+KEEP_BRANCH="false"
+YES="false"
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -f|--force)
+            FORCE="true"
+            shift
+            ;;
+        --keep-branch)
+            KEEP_BRANCH="true"
+            shift
+            ;;
+        -y|--yes)
+            YES="true"
+            shift
+            ;;
+        -*)
+            echo "Unknown option: $1"
+            exit 1
+            ;;
+        *)
+            TARGET="$1"
+            shift
+            ;;
+    esac
+done
+
+# Find the project root (parent of main/ directory)
+find_project_root() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -d "$dir/main/.git" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        local parent="$(dirname "$dir")"
+        if [[ -d "$parent/main/.git" ]]; then
+            echo "$parent"
+            return 0
+        fi
+        dir="$parent"
+    done
+    return 1
+}
+
+ROOT_DIR="$(find_project_root)" || {
+    echo "Error: Could not find project root with main/ directory"
+    exit 1
+}
+
+MAIN_REPO="$ROOT_DIR/main"
+CURRENT_DIR="$(pwd)"
+
+# Function to normalize branch name to directory name
+branch_to_dir() {
+    echo "$1" | sed -E 's/^(feat|fix|bug|chore|docs|style|refactor|perf|test|build|ci)\///' | tr '[:upper:]' '[:lower:]'
+}
+
+# Function to get branch name from worktree path
+get_worktree_branch() {
+    local path="$1"
+    git -C "$MAIN_REPO" worktree list --porcelain | awk -v path="$path" '
+        /^worktree / { wt = substr($0, 10) }
+        /^branch / { if (wt == path) { sub(/^branch refs\/heads\//, ""); print; exit } }
+    '
+}
+
+# Resolve target to WORKTREE_PATH and BRANCH
+resolve_target() {
+    local target="$1"
+
+    # If no target, check if we're inside a worktree
+    if [[ -z "$target" ]]; then
+        # Get git toplevel of current directory
+        local git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+
+        if [[ -z "$git_root" ]]; then
+            echo "Error: Not in a git repository and no target specified"
+            return 1
+        fi
+
+        # Check if we're in main
+        if [[ "$git_root" == "$MAIN_REPO" ]]; then
+            echo "Error: You're in the main repository. Specify a worktree to delete:"
+            echo "  mise worktree:delete <branch-or-directory>"
+            echo ""
+            echo "Available worktrees:"
+            git -C "$MAIN_REPO" worktree list | grep -v "$MAIN_REPO" || echo "  (none)"
+            return 1
+        fi
+
+        WORKTREE_PATH="$git_root"
+        BRANCH="$(get_worktree_branch "$git_root")"
+        return 0
+    fi
+
+    # Try to match as directory name first
+    if [[ -d "$ROOT_DIR/$target" ]]; then
+        WORKTREE_PATH="$ROOT_DIR/$target"
+        BRANCH="$(get_worktree_branch "$WORKTREE_PATH")"
+        if [[ -n "$BRANCH" ]]; then
+            return 0
+        fi
+    fi
+
+    # Try to match as branch name (convert to dir name)
+    local dir_name="$(branch_to_dir "$target")"
+    if [[ -d "$ROOT_DIR/$dir_name" ]]; then
+        WORKTREE_PATH="$ROOT_DIR/$dir_name"
+        BRANCH="$(get_worktree_branch "$WORKTREE_PATH")"
+        if [[ -n "$BRANCH" ]]; then
+            return 0
+        fi
+    fi
+
+    # Search through worktrees for matching branch
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^worktree\ (.+) ]]; then
+            local wt_path="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^branch\ refs/heads/(.+) ]]; then
+            local wt_branch="${BASH_REMATCH[1]}"
+            if [[ "$wt_branch" == "$target" ]]; then
+                WORKTREE_PATH="$wt_path"
+                BRANCH="$wt_branch"
+                return 0
+            fi
+        fi
+    done < <(git -C "$MAIN_REPO" worktree list --porcelain)
+
+    echo "Error: Could not find worktree for '$target'"
+    echo ""
+    echo "Available worktrees:"
+    git -C "$MAIN_REPO" worktree list | grep -v "$MAIN_REPO" || echo "  (none)"
+    return 1
+}
+
+# Resolve the target
+WORKTREE_PATH=""
+BRANCH=""
+resolve_target "$TARGET" || exit 1
+
+DIR_NAME="$(basename "$WORKTREE_PATH")"
+
+echo "Worktree: $WORKTREE_PATH"
+echo "Branch:   $BRANCH"
+echo ""
+
+# SAFETY CHECK 1: Uncommitted changes (always block, even with -f)
+if [[ -n "$(git -C "$WORKTREE_PATH" status --porcelain 2>/dev/null)" ]]; then
+    echo "Error: Worktree has uncommitted changes:"
+    git -C "$WORKTREE_PATH" status --short
+    echo ""
+    echo "Commit, stash, or discard your changes first."
+    echo "This check cannot be bypassed with -f for your safety."
+    exit 1
+fi
+
+# SAFETY CHECK 2: Unpushed commits
+UPSTREAM=$(git -C "$WORKTREE_PATH" rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)
+if [[ -n "$UPSTREAM" ]]; then
+    UNPUSHED=$(git -C "$WORKTREE_PATH" log '@{u}..HEAD' --oneline 2>/dev/null || true)
+    if [[ -n "$UNPUSHED" ]]; then
+        echo "Warning: Branch has unpushed commits:"
+        echo "$UNPUSHED"
+        echo ""
+        if [[ "$FORCE" != "true" ]]; then
+            echo "Use -f to force delete anyway."
+            exit 1
+        fi
+        echo "Continuing due to -f flag..."
+        echo ""
+    fi
+else
+    # No upstream, check if there are any commits not in main
+    UNPUSHED=$(git -C "$MAIN_REPO" log "main..$BRANCH" --oneline 2>/dev/null || true)
+    if [[ -n "$UNPUSHED" ]]; then
+        echo "Warning: Branch has commits not in main (and no upstream set):"
+        echo "$UNPUSHED"
+        echo ""
+        if [[ "$FORCE" != "true" ]]; then
+            echo "Use -f to force delete anyway."
+            exit 1
+        fi
+        echo "Continuing due to -f flag..."
+        echo ""
+    fi
+fi
+
+# SAFETY CHECK 3: Not merged to main
+cd "$MAIN_REPO"
+git fetch origin main:main 2>/dev/null || true
+
+if ! git branch --merged main | grep -q "^\s*$BRANCH$"; then
+    echo "Warning: Branch '$BRANCH' is not merged to main"
+    echo ""
+    if [[ "$FORCE" != "true" ]]; then
+        echo "Use -f to force delete anyway."
+        exit 1
+    fi
+    echo "Continuing due to -f flag..."
+    echo ""
+fi
+
+# Confirmation prompt
+if [[ "$YES" != "true" ]]; then
+    echo "This will:"
+    echo "  - Remove worktree at $WORKTREE_PATH"
+    if [[ "$KEEP_BRANCH" != "true" ]]; then
+        echo "  - Delete branch '$BRANCH'"
+    fi
+    echo ""
+    read -p "Continue? [y/N] " confirm
+    if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
+        echo "Aborted."
+        exit 0
+    fi
+fi
+
+# If currently inside the worktree, warn and exit
+if [[ "$CURRENT_DIR" == "$WORKTREE_PATH"* ]]; then
+    echo ""
+    echo "You're currently inside this worktree."
+    echo "Please cd to another directory first, then run this command again."
+    echo ""
+    echo "  cd $MAIN_REPO && mise worktree:delete $TARGET"
+    exit 1
+fi
+
+# Kill any zellij session for this worktree
+SESSION_NAME="claude-$DIR_NAME"
+if command -v zellij &>/dev/null; then
+    if zellij list-sessions 2>/dev/null | grep -q "^$SESSION_NAME"; then
+        echo "Killing zellij session: $SESSION_NAME"
+        zellij kill-session "$SESSION_NAME" 2>/dev/null || true
+    fi
+fi
+
+# Remove the worktree
+echo "Removing worktree..."
+git worktree remove "$WORKTREE_PATH" ${FORCE:+--force}
+
+# Delete the branch
+if [[ "$KEEP_BRANCH" != "true" ]]; then
+    echo "Deleting branch '$BRANCH'..."
+    if [[ "$FORCE" == "true" ]]; then
+        git branch -D "$BRANCH" 2>/dev/null || true
+    else
+        git branch -d "$BRANCH" 2>/dev/null || true
+    fi
+fi
+
+# Prune worktree references
+git worktree prune
+
+echo ""
+echo "Worktree deleted successfully!"

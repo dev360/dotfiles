@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+#MISE description="Start a Claude development session in a worktree with two Claude windows"
+#MISE usage="worktree:dev [branch-or-dir]"
+set -euo pipefail
+
+TARGET="${1:-}"
+
+# Find the project root (parent of main/ directory)
+find_project_root() {
+    local dir="$PWD"
+    while [[ "$dir" != "/" ]]; do
+        if [[ -d "$dir/main/.git" ]]; then
+            echo "$dir"
+            return 0
+        fi
+        local parent="$(dirname "$dir")"
+        if [[ -d "$parent/main/.git" ]]; then
+            echo "$parent"
+            return 0
+        fi
+        dir="$parent"
+    done
+    return 1
+}
+
+ROOT_DIR="$(find_project_root)" || {
+    echo "Error: Could not find project root with main/ directory"
+    exit 1
+}
+
+MAIN_REPO="$ROOT_DIR/main"
+
+# Function to normalize branch name to directory name
+branch_to_dir() {
+    echo "$1" | sed -E 's/^(feat|fix|bug|chore|docs|style|refactor|perf|test|build|ci)\///' | tr '[:upper:]' '[:lower:]'
+}
+
+# Function to get branch name from worktree path
+get_worktree_branch() {
+    local path="$1"
+    git -C "$MAIN_REPO" worktree list --porcelain | awk -v path="$path" '
+        /^worktree / { wt = substr($0, 10) }
+        /^branch / { if (wt == path) { sub(/^branch refs\/heads\//, ""); print; exit } }
+    '
+}
+
+# Resolve target to WORKTREE_PATH
+resolve_target() {
+    local target="$1"
+
+    # If no target, check if we're inside a worktree
+    if [[ -z "$target" ]]; then
+        local git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+
+        if [[ -z "$git_root" ]]; then
+            echo "Error: Not in a git repository and no target specified"
+            return 1
+        fi
+
+        if [[ "$git_root" == "$MAIN_REPO" ]]; then
+            echo "Error: You're in the main repository. Specify a worktree:"
+            echo "  mise worktree:dev <branch-or-directory>"
+            return 1
+        fi
+
+        WORKTREE_PATH="$git_root"
+        return 0
+    fi
+
+    # Try to match as directory name first
+    if [[ -d "$ROOT_DIR/$target" ]]; then
+        WORKTREE_PATH="$ROOT_DIR/$target"
+        return 0
+    fi
+
+    # Try to match as branch name (convert to dir name)
+    local dir_name="$(branch_to_dir "$target")"
+    if [[ -d "$ROOT_DIR/$dir_name" ]]; then
+        WORKTREE_PATH="$ROOT_DIR/$dir_name"
+        return 0
+    fi
+
+    # Search through worktrees for matching branch
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^worktree\ (.+) ]]; then
+            local wt_path="${BASH_REMATCH[1]}"
+        elif [[ "$line" =~ ^branch\ refs/heads/(.+) ]]; then
+            local wt_branch="${BASH_REMATCH[1]}"
+            if [[ "$wt_branch" == "$target" ]]; then
+                WORKTREE_PATH="$wt_path"
+                return 0
+            fi
+        fi
+    done < <(git -C "$MAIN_REPO" worktree list --porcelain)
+
+    echo "Error: Could not find worktree for '$target'"
+    echo "Run 'mise worktree:new $target' first to create it."
+    return 1
+}
+
+WORKTREE_PATH=""
+resolve_target "$TARGET" || exit 1
+
+DIR_NAME="$(basename "$WORKTREE_PATH")"
+BRANCH="$(get_worktree_branch "$WORKTREE_PATH")"
+
+# Create a session name from the directory
+SESSION_NAME="claude-$DIR_NAME"
+
+# Check if session already exists
+if command -v zellij &>/dev/null; then
+    if zellij list-sessions 2>/dev/null | grep -q "^$SESSION_NAME"; then
+        echo "Session '$SESSION_NAME' already exists."
+        echo "Attaching to existing session..."
+        zellij attach "$SESSION_NAME"
+        exit 0
+    fi
+fi
+
+# Generate the layout KDL for this worktree
+LAYOUT_FILE="$WORKTREE_PATH/.claude-layout.kdl"
+
+cat > "$LAYOUT_FILE" << EOF
+// Auto-generated Claude development layout for $BRANCH
+// Two side-by-side Claude sessions
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="status-bar"
+        }
+    }
+
+    tab name="claude" {
+        pane split_direction="vertical" {
+            pane command="claude" {
+                args "--dangerously-skip-permissions"
+                cwd "$WORKTREE_PATH"
+            }
+            pane command="claude" {
+                args "--dangerously-skip-permissions"
+                cwd "$WORKTREE_PATH"
+            }
+        }
+    }
+}
+EOF
+
+echo "Worktree: $WORKTREE_PATH"
+echo "Branch:   $BRANCH"
+echo "Session:  $SESSION_NAME"
+echo ""
+echo "Starting Claude development session..."
+
+# Check if we're already inside zellij
+if [[ -n "${ZELLIJ:-}" ]]; then
+    echo "Detected existing Zellij session."
+    echo "Running nested Zellij with layout..."
+    echo ""
+    ZELLIJ_FORCE_ATTACH=true zellij --layout "$LAYOUT_FILE" --session "$SESSION_NAME"
+else
+    zellij --layout "$LAYOUT_FILE" --session "$SESSION_NAME"
+fi
