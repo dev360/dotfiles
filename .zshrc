@@ -123,14 +123,33 @@ export NVM_DIR="$HOME/.nvm"
 
 # macOS (Homebrew)
 if [[ "$PLATFORM" == "macos" && -s "/opt/homebrew/opt/nvm/nvm.sh" ]]; then
-  source "/opt/homebrew/opt/nvm/nvm.sh"
+  source "/opt/homebrew/opt/nvm/nvm.sh" --no-use
   [ -s "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm" ] && \
     source "/opt/homebrew/opt/nvm/etc/bash_completion.d/nvm"
 # Linux/Generic
 elif [[ -s "$NVM_DIR/nvm.sh" ]]; then
-  source "$NVM_DIR/nvm.sh"
+  source "$NVM_DIR/nvm.sh" --no-use
   [ -s "$NVM_DIR/bash_completion" ] && source "$NVM_DIR/bash_completion"
 fi
+
+# Silent .nvmrc auto-switch on directory change
+_nvm_auto_switch() {
+  local nvmrc_path="$(nvm_find_nvmrc 2>/dev/null)"
+  if [[ -n "$nvmrc_path" ]]; then
+    local nvmrc_node_version=$(nvm version "$(cat "${nvmrc_path}")" 2>/dev/null)
+    if [[ "$nvmrc_node_version" = "N/A" ]]; then
+      nvm install >/dev/null 2>&1
+    elif [[ "$nvmrc_node_version" != "$(nvm version)" ]]; then
+      nvm use >/dev/null 2>&1
+    fi
+  elif [[ "$(nvm version)" != "$(nvm version default)" ]]; then
+    nvm use default >/dev/null 2>&1
+  fi
+}
+
+autoload -U add-zsh-hook
+add-zsh-hook chdir _nvm_auto_switch
+_nvm_auto_switch  # Run once on shell start
 
 # ============================================================================
 # Development Tools
