@@ -217,72 +217,55 @@ if [[ -n "$UNTRACKED_FILES" ]]; then
     echo ""
 fi
 
-# SAFETY CHECK 2: Unpushed commits
-# Fetch the remote branch info first
-git -C "$MAIN_REPO" fetch origin "$BRANCH" 2>/dev/null || true
-
-# Check if the remote branch exists
-REMOTE_BRANCH_EXISTS=$(git -C "$MAIN_REPO" show-ref --verify "refs/remotes/origin/$BRANCH" 2>/dev/null && echo "yes" || echo "no")
-
-# Get local commits not in default branch
-LOCAL_COMMITS=$(git -C "$MAIN_REPO" log "$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
-
-if [[ -n "$LOCAL_COMMITS" ]]; then
-    # Check if commits are on the remote branch (if it exists)
-    if [[ "$REMOTE_BRANCH_EXISTS" == "yes" ]]; then
-        UNPUSHED=$(git -C "$MAIN_REPO" log "origin/$BRANCH..$BRANCH" --oneline 2>/dev/null || true)
-        if [[ -n "$UNPUSHED" ]]; then
-            echo "Warning: Branch has commits not pushed to origin/$BRANCH:"
-            echo "$UNPUSHED"
-            echo ""
-            if [[ "$FORCE" != "true" ]]; then
-                echo "Use -f to force delete anyway."
-                exit 1
-            fi
-            echo "Continuing due to -f flag..."
-            echo ""
-        fi
-    else
-        # Remote branch doesn't exist - check if commits are in default branch (PR was merged)
-        COMMITS_IN_DEFAULT=$(git -C "$MAIN_REPO" log "origin/$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
-        if [[ -n "$COMMITS_IN_DEFAULT" ]]; then
-            # Check if these exact commits (by patch) are in default branch
-            # Use cherry to find commits that haven't been merged
-            UNMERGED=$(git -C "$MAIN_REPO" cherry -v "origin/$DEFAULT_BRANCH" "$BRANCH" 2>/dev/null | grep '^+' || true)
-            if [[ -n "$UNMERGED" ]]; then
-                echo "Warning: Branch has commits not in origin/$DEFAULT_BRANCH (remote branch deleted/not found):"
-                echo "$UNMERGED"
-                echo ""
-                if [[ "$FORCE" != "true" ]]; then
-                    echo "Use -f to force delete anyway."
-                    exit 1
-                fi
-                echo "Continuing due to -f flag..."
-                echo ""
-            fi
-        fi
-    fi
-fi
-
-# SAFETY CHECK 3: Not merged to main
+# SAFETY CHECK 2: Not merged to main (or has post-merge commits)
+# This catches both: (a) remote branch never existed, (b) remote was deleted before merge
 cd "$MAIN_REPO"
 git fetch origin "$DEFAULT_BRANCH:$DEFAULT_BRANCH" 2>/dev/null || true
 
-# Use git cherry to detect if commits have been merged (works with squash merges too)
-# git cherry shows '+' for commits NOT in upstream, '-' for commits that ARE in upstream
-UNMERGED_TO_MAIN=$(git cherry -v "origin/$DEFAULT_BRANCH" "$BRANCH" 2>/dev/null | grep '^+' || true)
-
-if [[ -n "$UNMERGED_TO_MAIN" ]]; then
-    echo "Warning: Branch '$BRANCH' has commits not in $DEFAULT_BRANCH:"
-    echo "$UNMERGED_TO_MAIN" | head -5
-    [[ $(echo "$UNMERGED_TO_MAIN" | wc -l) -gt 5 ]] && echo "  ... and more"
-    echo ""
-    if [[ "$FORCE" != "true" ]]; then
-        echo "Use -f to force delete anyway."
-        exit 1
+# First check if there's a merged PR for this branch (handles squash/rebase merges)
+PR_MERGED="false"
+PR_MERGE_DATE=""
+if command -v gh &>/dev/null; then
+    # Check for merged PR with this branch as head
+    MERGED_PR=$(gh pr list --state merged --head "$BRANCH" --json number,mergedAt --limit 1 2>/dev/null || true)
+    if [[ -n "$MERGED_PR" && "$MERGED_PR" != "[]" ]]; then
+        PR_MERGED="true"
+        PR_MERGE_DATE=$(echo "$MERGED_PR" | jq -r '.[0].mergedAt' 2>/dev/null || true)
     fi
-    echo "Continuing due to -f flag..."
-    echo ""
+fi
+
+if [[ "$PR_MERGED" == "true" && -n "$PR_MERGE_DATE" ]]; then
+    # PR was merged - but check if there are local commits AFTER the merge
+    COMMITS_AFTER_MERGE=$(git log --after="$PR_MERGE_DATE" "$BRANCH" --oneline 2>/dev/null || true)
+    if [[ -n "$COMMITS_AFTER_MERGE" ]]; then
+        echo "Warning: Branch '$BRANCH' has commits made after PR was merged:"
+        echo "$COMMITS_AFTER_MERGE" | head -5
+        [[ $(echo "$COMMITS_AFTER_MERGE" | wc -l) -gt 5 ]] && echo "  ... and more"
+        echo ""
+        if [[ "$FORCE" != "true" ]]; then
+            echo "Use -f to force delete anyway."
+            exit 1
+        fi
+        echo "Continuing due to -f flag..."
+        echo ""
+    fi
+else
+    # No merged PR found - use git cherry to detect unmerged commits
+    # git cherry shows '+' for commits NOT in upstream, '-' for commits that ARE in upstream
+    UNMERGED_TO_MAIN=$(git cherry -v "origin/$DEFAULT_BRANCH" "$BRANCH" 2>/dev/null | grep '^+' || true)
+
+    if [[ -n "$UNMERGED_TO_MAIN" ]]; then
+        echo "Warning: Branch '$BRANCH' has commits not in $DEFAULT_BRANCH:"
+        echo "$UNMERGED_TO_MAIN" | head -5
+        [[ $(echo "$UNMERGED_TO_MAIN" | wc -l) -gt 5 ]] && echo "  ... and more"
+        echo ""
+        if [[ "$FORCE" != "true" ]]; then
+            echo "Use -f to force delete anyway."
+            exit 1
+        fi
+        echo "Continuing due to -f flag..."
+        echo ""
+    fi
 fi
 
 # Confirmation prompt
