@@ -283,14 +283,10 @@ if [[ "$YES" != "true" ]]; then
     fi
 fi
 
-# If currently inside the worktree, warn and exit
+# Track if we're inside the worktree being deleted
+INSIDE_WORKTREE=false
 if [[ "$CURRENT_DIR" == "$WORKTREE_PATH"* ]]; then
-    echo ""
-    echo "You're currently inside this worktree."
-    echo "Please cd to another directory first, then run this command again."
-    echo ""
-    echo "  cd $MAIN_REPO && mise worktree:delete $TARGET"
-    exit 1
+    INSIDE_WORKTREE=true
 fi
 
 # Kill any zellij session for this worktree
@@ -321,3 +317,9 @@ git worktree prune
 
 echo ""
 echo "Worktree deleted successfully!"
+
+if [[ "$INSIDE_WORKTREE" == "true" ]]; then
+    echo ""
+    echo "Note: Your shell is still in the deleted directory."
+    echo "Run: cd $MAIN_REPO"
+fi
