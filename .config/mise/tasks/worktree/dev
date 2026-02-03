@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Start a Claude development session in a worktree"
-#MISE usage="worktree:dev [branch-or-dir] [--orchestrator] [--prompt ['...']] [--agent <name>]"
+#MISE usage="worktree:dev [branch-or-dir] [--orchestrator] [--float] [--prompt ['...']] [--agent <name>]"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
@@ -10,6 +10,7 @@ cd "$ORIGINAL_CWD"
 # Parse arguments
 TARGET=""
 ORCHESTRATOR=false
+FLOAT=false
 DANGEROUS=false
 WITH_VIM=false
 RESUME=false
@@ -21,6 +22,10 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --orchestrator)
             ORCHESTRATOR=true
+            shift
+            ;;
+        --float)
+            FLOAT=true
             shift
             ;;
         --dangerous)
@@ -59,6 +64,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Validate flag combinations
+if [[ "$ORCHESTRATOR" == "true" && "$FLOAT" == "true" ]]; then
+    echo "Error: --orchestrator and --float cannot be used together"
+    exit 1
+fi
 
 # Detect project structure (main/ structure or regular repo)
 MODE=""
@@ -376,6 +387,41 @@ layout {
 EOF
         PANE_INFO="Single Claude instance"
     fi
+fi
+
+# Handle float mode separately
+if [[ "$FLOAT" == "true" ]]; then
+    PANE_NAME="claude-${BRANCH_SAFE}"
+
+    echo "=========================================="
+    echo "  Claude Worktree Development (Float)"
+    echo "=========================================="
+    echo ""
+    echo "Worktree: $WORKTREE_PATH"
+    echo "Branch:   $BRANCH"
+    echo "Mode:     Floating Claude session"
+    echo ""
+    echo "=========================================="
+    echo ""
+
+    # Build args for claude-session
+    FLOAT_ARGS="${PANE_NAME}"
+    if [[ "$RESUME" == "true" ]]; then
+        FLOAT_ARGS="${FLOAT_ARGS} --resume"
+    fi
+    if [[ "$DANGEROUS" == "true" ]]; then
+        FLOAT_ARGS="${FLOAT_ARGS} --dangerously-skip-permissions"
+    fi
+    if [[ -n "$AGENT" ]]; then
+        FLOAT_ARGS="${FLOAT_ARGS} --agent ${AGENT}"
+    fi
+    if [[ "$RESUME" != "true" && "$USE_PROMPT" == "true" && -n "$PROMPT" ]]; then
+        FLOAT_ARGS="${FLOAT_ARGS} --prompt '${PROMPT}'"
+    fi
+
+    # Launch as floating pane (pinned)
+    cd "$WORKTREE_PATH"
+    exec zellij run -f -n "$PANE_NAME" -c "$WORKTREE_PATH" -- "$CLAUDE_SESSION" $FLOAT_ARGS
 fi
 
 echo "=========================================="
