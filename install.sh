@@ -398,7 +398,8 @@ setup_dotfiles() {
         mkdir -p "$HOME/.config/mise/tasks"
 
         # Find all task files and symlink them if they don't exist
-        find "$DOTFILES_DIR/.config/mise/tasks" -type f -executable | while read -r task_file; do
+        # Note: -perm +111 works on macOS, -perm /111 works on Linux for "any execute bit"
+        find "$DOTFILES_DIR/.config/mise/tasks" -type f \( -perm +111 -o -perm /111 \) 2>/dev/null | while read -r task_file; do
             # Get relative path from tasks directory
             rel_path="${task_file#$DOTFILES_DIR/.config/mise/tasks/}"
             target_dir="$HOME/.config/mise/tasks/$(dirname "$rel_path")"
@@ -424,7 +425,7 @@ setup_dotfiles() {
     # Mise bin scripts (symlink individual scripts)
     if [ -d "$DOTFILES_DIR/.config/mise/bin" ]; then
         mkdir -p "$HOME/.config/mise/bin"
-        find "$DOTFILES_DIR/.config/mise/bin" -type f -executable | while read -r bin_file; do
+        find "$DOTFILES_DIR/.config/mise/bin" -type f \( -perm +111 -o -perm /111 \) 2>/dev/null | while read -r bin_file; do
             bin_name="$(basename "$bin_file")"
             target_file="$HOME/.config/mise/bin/$bin_name"
             ln -sf "$bin_file" "$target_file"
