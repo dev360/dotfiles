@@ -148,7 +148,7 @@ _nvm_auto_switch() {
 }
 
 autoload -U add-zsh-hook
-add-zsh-hook chdir _nvm_auto_switch
+add-zsh-hook chpwd _nvm_auto_switch
 _nvm_auto_switch  # Run once on shell start
 
 # ============================================================================
