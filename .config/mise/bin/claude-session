@@ -60,14 +60,16 @@ if [[ "$RESUME_MODE" != "true" && -n "$PROMPT" ]]; then
 fi
 
 # Generate layout that runs claude with auto-init (no UI for nested session)
+# close_on_exit=true ensures the pane closes when claude exits
+# We don't use 'exec' so that cleanup runs after claude exits
 cat > "$LAYOUT_FILE" << EOF
 layout {
     default_tab_template {
         children
     }
-    pane borderless=true {
+    pane borderless=true close_on_exit=true {
         command "bash"
-        args "-c" "(sleep 2 && zellij action write-chars '${INIT_CMD}' && zellij action write 13${RENAME_CMD:+ && sleep 0.5 && zellij action write-chars '${RENAME_CMD}' && zellij action write 13}${PROMPT_CMD}) & exec claude ${CLAUDE_ARGS}"
+        args "-c" "(sleep 2 && zellij action write-chars '${INIT_CMD}' && zellij action write 13${RENAME_CMD:+ && sleep 0.5 && zellij action write-chars '${RENAME_CMD}' && zellij action write 13}${PROMPT_CMD}) & claude ${CLAUDE_ARGS}; zellij kill-session ${SESSION_NAME} 2>/dev/null"
     }
 }
 EOF

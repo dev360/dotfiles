@@ -191,44 +191,76 @@ echo "Worktree: $WORKTREE_PATH"
 echo "Branch:   $BRANCH"
 echo ""
 
-# SAFETY CHECK 1: Uncommitted changes (always block, even with -f)
-if [[ -n "$(git -C "$WORKTREE_PATH" status --porcelain 2>/dev/null)" ]]; then
-    echo "Error: Worktree has uncommitted changes:"
-    git -C "$WORKTREE_PATH" status --short
+# SAFETY CHECK 1: Uncommitted changes
+# Check for changes to tracked files (staged or unstaged modifications)
+TRACKED_CHANGES="$(git -C "$WORKTREE_PATH" status --porcelain 2>/dev/null | grep -v '^??' || true)"
+UNTRACKED_FILES="$(git -C "$WORKTREE_PATH" status --porcelain 2>/dev/null | grep '^??' || true)"
+
+if [[ -n "$TRACKED_CHANGES" ]]; then
+    echo "Error: Worktree has uncommitted changes to tracked files:"
+    echo "$TRACKED_CHANGES"
     echo ""
     echo "Commit, stash, or discard your changes first."
     echo "This check cannot be bypassed with -f for your safety."
     exit 1
 fi
 
-# SAFETY CHECK 2: Unpushed commits
-UPSTREAM=$(git -C "$WORKTREE_PATH" rev-parse --abbrev-ref '@{u}' 2>/dev/null || true)
-if [[ -n "$UPSTREAM" ]]; then
-    UNPUSHED=$(git -C "$WORKTREE_PATH" log '@{u}..HEAD' --oneline 2>/dev/null || true)
-    if [[ -n "$UNPUSHED" ]]; then
-        echo "Warning: Branch has unpushed commits:"
-        echo "$UNPUSHED"
-        echo ""
-        if [[ "$FORCE" != "true" ]]; then
-            echo "Use -f to force delete anyway."
-            exit 1
-        fi
-        echo "Continuing due to -f flag..."
-        echo ""
+if [[ -n "$UNTRACKED_FILES" ]]; then
+    echo "Warning: Worktree has untracked files:"
+    echo "$UNTRACKED_FILES"
+    echo ""
+    if [[ "$FORCE" != "true" ]]; then
+        echo "Use -f to force delete anyway (untracked files will be lost)."
+        exit 1
     fi
-else
-    # No upstream, check if there are any commits not in main
-    UNPUSHED=$(git -C "$MAIN_REPO" log "$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
-    if [[ -n "$UNPUSHED" ]]; then
-        echo "Warning: Branch has commits not in $DEFAULT_BRANCH (and no upstream set):"
-        echo "$UNPUSHED"
-        echo ""
-        if [[ "$FORCE" != "true" ]]; then
-            echo "Use -f to force delete anyway."
-            exit 1
+    echo "Continuing due to -f flag..."
+    echo ""
+fi
+
+# SAFETY CHECK 2: Unpushed commits
+# Fetch the remote branch info first
+git -C "$MAIN_REPO" fetch origin "$BRANCH" 2>/dev/null || true
+
+# Check if the remote branch exists
+REMOTE_BRANCH_EXISTS=$(git -C "$MAIN_REPO" show-ref --verify "refs/remotes/origin/$BRANCH" 2>/dev/null && echo "yes" || echo "no")
+
+# Get local commits not in default branch
+LOCAL_COMMITS=$(git -C "$MAIN_REPO" log "$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
+
+if [[ -n "$LOCAL_COMMITS" ]]; then
+    # Check if commits are on the remote branch (if it exists)
+    if [[ "$REMOTE_BRANCH_EXISTS" == "yes" ]]; then
+        UNPUSHED=$(git -C "$MAIN_REPO" log "origin/$BRANCH..$BRANCH" --oneline 2>/dev/null || true)
+        if [[ -n "$UNPUSHED" ]]; then
+            echo "Warning: Branch has commits not pushed to origin/$BRANCH:"
+            echo "$UNPUSHED"
+            echo ""
+            if [[ "$FORCE" != "true" ]]; then
+                echo "Use -f to force delete anyway."
+                exit 1
+            fi
+            echo "Continuing due to -f flag..."
+            echo ""
         fi
-        echo "Continuing due to -f flag..."
-        echo ""
+    else
+        # Remote branch doesn't exist - check if commits are in default branch (PR was merged)
+        COMMITS_IN_DEFAULT=$(git -C "$MAIN_REPO" log "origin/$DEFAULT_BRANCH..$BRANCH" --oneline 2>/dev/null || true)
+        if [[ -n "$COMMITS_IN_DEFAULT" ]]; then
+            # Check if these exact commits (by patch) are in default branch
+            # Use cherry to find commits that haven't been merged
+            UNMERGED=$(git -C "$MAIN_REPO" cherry -v "origin/$DEFAULT_BRANCH" "$BRANCH" 2>/dev/null | grep '^+' || true)
+            if [[ -n "$UNMERGED" ]]; then
+                echo "Warning: Branch has commits not in origin/$DEFAULT_BRANCH (remote branch deleted/not found):"
+                echo "$UNMERGED"
+                echo ""
+                if [[ "$FORCE" != "true" ]]; then
+                    echo "Use -f to force delete anyway."
+                    exit 1
+                fi
+                echo "Continuing due to -f flag..."
+                echo ""
+            fi
+        fi
     fi
 fi
 
@@ -236,8 +268,14 @@ fi
 cd "$MAIN_REPO"
 git fetch origin "$DEFAULT_BRANCH:$DEFAULT_BRANCH" 2>/dev/null || true
 
-if ! git branch --merged "$DEFAULT_BRANCH" | grep -q "^\s*$BRANCH$"; then
-    echo "Warning: Branch '$BRANCH' is not merged to $DEFAULT_BRANCH"
+# Use git cherry to detect if commits have been merged (works with squash merges too)
+# git cherry shows '+' for commits NOT in upstream, '-' for commits that ARE in upstream
+UNMERGED_TO_MAIN=$(git cherry -v "origin/$DEFAULT_BRANCH" "$BRANCH" 2>/dev/null | grep '^+' || true)
+
+if [[ -n "$UNMERGED_TO_MAIN" ]]; then
+    echo "Warning: Branch '$BRANCH' has commits not in $DEFAULT_BRANCH:"
+    echo "$UNMERGED_TO_MAIN" | head -5
+    [[ $(echo "$UNMERGED_TO_MAIN" | wc -l) -gt 5 ]] && echo "  ... and more"
     echo ""
     if [[ "$FORCE" != "true" ]]; then
         echo "Use -f to force delete anyway."

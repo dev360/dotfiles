@@ -144,12 +144,6 @@ fi
 echo "Creating worktree at $WORKTREE_PATH..."
 git worktree add "$WORKTREE_PATH" "$BRANCH"
 
-# Copy mise config to the new worktree if it exists
-if [[ -d "$MAIN_REPO/.mise" ]]; then
-    echo "Copying mise configuration..."
-    cp -r "$MAIN_REPO/.mise" "$WORKTREE_PATH/.mise"
-fi
-
 echo ""
 echo "=========================================="
 echo "  Worktree Created Successfully"

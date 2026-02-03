@@ -318,7 +318,7 @@ layout {
                 cwd "${WORKTREE_PATH}"
                 command "nvim"
             }
-            pane size="33%" name="${PANE_NAME}" {
+            pane size="33%" name="${PANE_NAME}" close_on_exit=true {
                 cwd "${WORKTREE_PATH}"
                 command "${CLAUDE_SESSION}"
                 args "${PANE_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
@@ -357,12 +357,12 @@ layout {
 
     tab name="${CLAUDE_TAB_NAME}" {
         pane split_direction="vertical" {
-            pane name="${PANE1_NAME}" {
+            pane name="${PANE1_NAME}" close_on_exit=true {
                 cwd "${WORKTREE_PATH}"
                 command "${CLAUDE_SESSION}"
                 args "${PANE1_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
             }
-            pane name="${PANE2_NAME}" {
+            pane name="${PANE2_NAME}" close_on_exit=true {
                 cwd "${WORKTREE_PATH}"
                 command "${CLAUDE_SESSION}"
                 args "${PANE2_NAME}" ${EXTRA_ARGS}
@@ -399,7 +399,7 @@ layout {
     }
 
     tab name="${CLAUDE_TAB_NAME}" {
-        pane name="${PANE_NAME}" {
+        pane name="${PANE_NAME}" close_on_exit=true {
             cwd "${WORKTREE_PATH}"
             command "${CLAUDE_SESSION}"
             args "${PANE_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
@@ -433,12 +433,12 @@ layout {
 
     tab name="${CLAUDE_TAB_NAME}" {
         pane split_direction="vertical" {
-            pane name="${PANE1_NAME}" {
+            pane name="${PANE1_NAME}" close_on_exit=true {
                 cwd "${WORKTREE_PATH}"
                 command "${CLAUDE_SESSION}"
                 args "${PANE1_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
             }
-            pane name="${PANE2_NAME}" {
+            pane name="${PANE2_NAME}" close_on_exit=true {
                 cwd "${WORKTREE_PATH}"
                 command "${CLAUDE_SESSION}"
                 args "${PANE2_NAME}" ${EXTRA_ARGS}
@@ -468,7 +468,7 @@ layout {
     }
 
     tab name="${CLAUDE_TAB_NAME}" {
-        pane name="${PANE_NAME}" {
+        pane name="${PANE_NAME}" close_on_exit=true {
             cwd "${WORKTREE_PATH}"
             command "${CLAUDE_SESSION}"
             args "${PANE_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
