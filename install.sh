@@ -374,6 +374,10 @@ setup_dotfiles() {
     ln -sf "$DOTFILES_DIR/.zshrc" "$HOME/.zshrc"
     print_success "Symlinked .zshrc"
 
+    # Symlink .hushlogin (suppresses "Last login" message)
+    ln -sf "$DOTFILES_DIR/.hushlogin" "$HOME/.hushlogin"
+    print_success "Symlinked .hushlogin"
+
     # Symlink .config directories
     mkdir -p "$HOME/.config"
 
