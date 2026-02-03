@@ -147,10 +147,26 @@ if [[ -d "$HOME/go/bin" ]]; then
 fi
 
 # ============================================================================
+# Oh-My-Zsh (load BEFORE starship so starship can override the prompt)
+# ============================================================================
+export ZSH="$HOME/.oh-my-zsh"
+ZSH_THEME=""  # Disabled - using Starship instead
+
+# Plugins (install these to ~/.oh-my-zsh/custom/plugins/):
+#   git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
+#   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
+plugins=(git history-substring-search zsh-autosuggestions)
+
+# Only load oh-my-zsh if it exists
+if [[ -d "$ZSH" ]]; then
+  source $ZSH/oh-my-zsh.sh
+fi
+
+# ============================================================================
 # Shell Enhancements
 # ============================================================================
 
-# Starship prompt
+# Starship prompt (must be after oh-my-zsh to override its prompt)
 if _has starship; then
   eval "$(starship init zsh)"
 fi
@@ -177,22 +193,6 @@ elif _has vim; then
   export EDITOR=$(which vim)
 else
   export EDITOR=$(which vi)
-fi
-
-# ============================================================================
-# Oh-My-Zsh
-# ============================================================================
-export ZSH="$HOME/.oh-my-zsh"
-ZSH_THEME=""  # Disabled - using Starship instead
-
-# Plugins (install these to ~/.oh-my-zsh/custom/plugins/):
-#   git clone https://github.com/zsh-users/zsh-history-substring-search ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-history-substring-search
-#   git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
-plugins=(git history-substring-search zsh-autosuggestions)
-
-# Only load oh-my-zsh if it exists
-if [[ -d "$ZSH" ]]; then
-  source $ZSH/oh-my-zsh.sh
 fi
 
 # ============================================================================
