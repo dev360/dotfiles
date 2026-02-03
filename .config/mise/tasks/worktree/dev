@@ -11,9 +11,10 @@ cd "$ORIGINAL_CWD"
 TARGET=""
 NEW=false
 ORCHESTRATOR=false
-PANE=false
+# Use WORKTREE_* env vars as defaults if set
+PANE="${WORKTREE_PANE:-false}"
 DANGEROUS=false
-WITH_VIM=false
+WITH_VIM="${WORKTREE_VIM:-false}"
 RESUME=false
 USE_PROMPT=false
 PROMPT=""
