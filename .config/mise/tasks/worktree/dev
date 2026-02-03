@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #MISE description="Start a Claude development session in a worktree"
-#MISE usage="worktree:dev [branch-or-dir] [--orchestrator] [--float] [--prompt ['...']] [--agent <name>]"
+#MISE usage="worktree:dev [branch-or-dir] [--new] [--orchestrator] [--pane] [--prompt ['...']] [--agent <name>]"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
@@ -9,8 +9,9 @@ cd "$ORIGINAL_CWD"
 
 # Parse arguments
 TARGET=""
+NEW=false
 ORCHESTRATOR=false
-FLOAT=false
+PANE=false
 DANGEROUS=false
 WITH_VIM=false
 RESUME=false
@@ -20,12 +21,40 @@ AGENT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        -h|--help)
+            cat <<EOF
+Usage: mise worktree:dev [branch-or-dir] [options]
+
+Start a Claude development session in a git worktree.
+
+Options:
+  --new          Create the worktree first if it doesn't exist
+  --orchestrator Split view with two Claude instances (implementer + orchestrator)
+  --pane         Side-by-side vim + claude in one tab (requires --vim, 2/3 + 1/3 split)
+  --vim          Include a vim tab in the layout
+  --prompt [MSG] Auto-send a prompt (defaults to "Work on <branch>" if no message)
+  --agent NAME   Use a specific Claude agent
+  --resume       Resume the previous Claude session
+  --dangerous    Skip Claude permission prompts
+
+Examples:
+  mise worktree:dev                           # Dev session in current worktree
+  mise worktree:dev feat/FLO-123              # Dev session for specific branch
+  mise worktree:dev feat/FLO-123 --new        # Create worktree and start session
+  mise worktree:dev --vim --pane --prompt     # Vim + Claude side-by-side
+EOF
+            exit 0
+            ;;
+        --new)
+            NEW=true
+            shift
+            ;;
         --orchestrator)
             ORCHESTRATOR=true
             shift
             ;;
-        --float)
-            FLOAT=true
+        --pane)
+            PANE=true
             shift
             ;;
         --dangerous)
@@ -66,8 +95,12 @@ while [[ $# -gt 0 ]]; do
 done
 
 # Validate flag combinations
-if [[ "$ORCHESTRATOR" == "true" && "$FLOAT" == "true" ]]; then
-    echo "Error: --orchestrator and --float cannot be used together"
+if [[ "$ORCHESTRATOR" == "true" && "$PANE" == "true" ]]; then
+    echo "Error: --orchestrator and --pane cannot be used together"
+    exit 1
+fi
+if [[ "$PANE" == "true" && "$WITH_VIM" != "true" ]]; then
+    echo "Error: --pane requires --vim"
     exit 1
 fi
 
@@ -184,6 +217,28 @@ resolve_target() {
     return 1
 }
 
+# Handle --new flag: create worktree if it doesn't exist
+if [[ "$NEW" == "true" ]]; then
+    if [[ -z "$TARGET" ]]; then
+        echo "Error: --new requires a branch name"
+        echo "Usage: mise worktree:dev <branch> --new"
+        exit 1
+    fi
+
+    # Try to resolve - if it succeeds, worktree already exists
+    WORKTREE_PATH=""
+    if resolve_target "$TARGET" &>/dev/null; then
+        echo "Error: Worktree for '$TARGET' already exists"
+        echo "Remove the --new flag to start a dev session on the existing worktree."
+        exit 1
+    fi
+
+    # Worktree doesn't exist, create it
+    echo "Creating new worktree for '$TARGET'..."
+    mise worktree:new "$TARGET"
+    echo ""
+fi
+
 WORKTREE_PATH=""
 resolve_target "$TARGET" || exit 1
 
@@ -236,8 +291,43 @@ CLAUDE_TAB_NAME="claude"
 
 # Generate the layout KDL based on mode
 if [[ "$WITH_VIM" == "true" ]]; then
-    # Two tabs: vim + claude
-    if [[ "$ORCHESTRATOR" == "true" ]]; then
+    if [[ "$PANE" == "true" ]]; then
+        # Single tab: vim (2/3) + claude (1/3) side-by-side
+        PANE_NAME="claude-${BRANCH_SAFE}"
+
+        cat > "$LAYOUT_FILE" << EOF
+// Claude Development Layout (Vim + Claude Side-by-Side)
+// Worktree: ${DIR_NAME}
+// Branch: ${BRANCH}
+
+layout {
+    default_tab_template {
+        pane size=1 borderless=true {
+            plugin location="zellij:tab-bar"
+        }
+        children
+        pane size=2 borderless=true {
+            plugin location="zellij:status-bar"
+        }
+    }
+
+    tab name="dev" {
+        pane split_direction="vertical" {
+            pane size="67%" {
+                cwd "${WORKTREE_PATH}"
+                command "nvim"
+            }
+            pane size="33%" name="${PANE_NAME}" {
+                cwd "${WORKTREE_PATH}"
+                command "${CLAUDE_SESSION}"
+                args "${PANE_NAME}" ${EXTRA_ARGS_WITH_PROMPT}
+            }
+        }
+    }
+}
+EOF
+        PANE_INFO="Vim + Claude side-by-side (2/3 + 1/3)"
+    elif [[ "$ORCHESTRATOR" == "true" ]]; then
         PANE1_NAME="claude-${BRANCH_SAFE}"
         PANE2_NAME="claude-${BRANCH_SAFE}-orchestrator"
 
@@ -387,41 +477,6 @@ layout {
 EOF
         PANE_INFO="Single Claude instance"
     fi
-fi
-
-# Handle float mode separately
-if [[ "$FLOAT" == "true" ]]; then
-    PANE_NAME="claude-${BRANCH_SAFE}"
-
-    echo "=========================================="
-    echo "  Claude Worktree Development (Float)"
-    echo "=========================================="
-    echo ""
-    echo "Worktree: $WORKTREE_PATH"
-    echo "Branch:   $BRANCH"
-    echo "Mode:     Floating Claude session"
-    echo ""
-    echo "=========================================="
-    echo ""
-
-    # Build args for claude-session
-    FLOAT_ARGS="${PANE_NAME}"
-    if [[ "$RESUME" == "true" ]]; then
-        FLOAT_ARGS="${FLOAT_ARGS} --resume"
-    fi
-    if [[ "$DANGEROUS" == "true" ]]; then
-        FLOAT_ARGS="${FLOAT_ARGS} --dangerously-skip-permissions"
-    fi
-    if [[ -n "$AGENT" ]]; then
-        FLOAT_ARGS="${FLOAT_ARGS} --agent ${AGENT}"
-    fi
-    if [[ "$RESUME" != "true" && "$USE_PROMPT" == "true" && -n "$PROMPT" ]]; then
-        FLOAT_ARGS="${FLOAT_ARGS} --prompt '${PROMPT}'"
-    fi
-
-    # Launch as floating pane (pinned)
-    cd "$WORKTREE_PATH"
-    exec zellij run -f -n "$PANE_NAME" -c "$WORKTREE_PATH" -- "$CLAUDE_SESSION" $FLOAT_ARGS
 fi
 
 echo "=========================================="

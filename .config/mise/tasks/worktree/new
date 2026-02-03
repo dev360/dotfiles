@@ -112,7 +112,7 @@ fi
 
 # Fetch latest from origin to ensure we have branch info
 echo "Fetching latest from origin..."
-git fetch origin
+git fetch -q origin
 
 # Determine the default branch (main or master)
 DEFAULT_BRANCH=""
