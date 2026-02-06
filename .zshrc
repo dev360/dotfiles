@@ -43,6 +43,7 @@ esac
 # Aliases (Platform-Agnostic)
 # ============================================================================
 alias k="kubectl"
+alias zel="zellij"
 alias c="clear"
 alias cd_c="cd ~/Code/"
 alias cd_d="cd ~/Downloads/"
