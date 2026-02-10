@@ -2,5 +2,6 @@
 # export OPENAI_API_KEY="your_key_here"
 
 # Worktree dev session defaults (mise worktree:dev)
-# export WORKTREE_VIM=true   # Always include vim tab
-# export WORKTREE_PANE=true  # Side-by-side vim + claude (requires WORKTREE_VIM=true)
+# export WORKTREE_VIM=true        # Always include vim tab
+# export WORKTREE_PANE=true       # Side-by-side vim + claude (requires WORKTREE_VIM=true)
+# export WORKTREE_DANGEROUS=true  # Skip Claude permission prompts

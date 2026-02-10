@@ -13,7 +13,7 @@ NEW=false
 ORCHESTRATOR=false
 # Use WORKTREE_* env vars as defaults if set
 PANE="${WORKTREE_PANE:-false}"
-DANGEROUS=false
+DANGEROUS="${WORKTREE_DANGEROUS:-false}"
 WITH_VIM="${WORKTREE_VIM:-false}"
 RESUME=false
 USE_PROMPT=false
@@ -36,7 +36,7 @@ Options:
   --prompt [MSG] Auto-send a prompt (defaults to "Work on <branch>" if no message)
   --agent NAME   Use a specific Claude agent
   --resume       Resume the previous Claude session
-  --dangerous    Skip Claude permission prompts
+  --dangerous    Skip Claude permission prompts (default: \$WORKTREE_DANGEROUS)
 
 Examples:
   mise worktree:dev                           # Dev session in current worktree

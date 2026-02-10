@@ -144,6 +144,12 @@ fi
 echo "Creating worktree at $WORKTREE_PATH..."
 git worktree add "$WORKTREE_PATH" "$BRANCH"
 
+# Trust mise config if present in the new worktree
+if ls "$WORKTREE_PATH"/.mise.toml "$WORKTREE_PATH"/mise.toml "$WORKTREE_PATH"/.mise/ 2>/dev/null | head -1 > /dev/null 2>&1; then
+    echo "Mise config detected, running mise trust..."
+    mise trust --all -C "$WORKTREE_PATH"
+fi
+
 echo ""
 echo "=========================================="
 echo "  Worktree Created Successfully"
