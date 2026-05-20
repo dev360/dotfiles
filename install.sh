@@ -352,6 +352,77 @@ install_cli_utilities() {
 }
 
 # ============================================================================
+# Fonts
+# ============================================================================
+
+install_fonts() {
+    print_header "Installing fonts"
+
+    if [ "$PLATFORM" = "macos" ]; then
+        # Iosevka Term Nerd Font - strict fixed-width with Nerd Font glyphs
+        if brew list --cask font-iosevka-term-nerd-font >/dev/null 2>&1; then
+            print_success "Iosevka Term Nerd Font already installed"
+        else
+            print_header "Installing Iosevka Term Nerd Font"
+            $PKG_CASK_INSTALL font-iosevka-term-nerd-font || print_warning "Failed to install Iosevka Term Nerd Font"
+        fi
+    elif [ "$PLATFORM" = "arch" ]; then
+        install_package "iosevka" "" "ttf-iosevka-nerd"
+    fi
+}
+
+# ============================================================================
+# Mise Tasks & Bin Setup
+# ============================================================================
+
+# Symlink everything under .config/mise/{tasks,bin} from the dotfiles repo into
+# ~/.config/mise. Tasks preserve subdirectory structure; existing non-symlink
+# files are left alone so per-machine overrides aren't clobbered.
+setup_mise() {
+    local dotfiles_dir="$1"
+    local src_tasks="$dotfiles_dir/.config/mise/tasks"
+    local src_bin="$dotfiles_dir/.config/mise/bin"
+
+    if [ -d "$src_tasks" ]; then
+        print_header "Installing mise global tasks"
+        mkdir -p "$HOME/.config/mise/tasks"
+
+        # Use shell -x test so we don't depend on BSD vs GNU find's -perm syntax
+        # (BSD rejects -perm /111, GNU rejects -perm +111).
+        find "$src_tasks" -type f -print0 | while IFS= read -r -d '' task_file; do
+            [ -x "$task_file" ] || continue
+            local rel_path="${task_file#$src_tasks/}"
+            local target_dir="$HOME/.config/mise/tasks/$(dirname "$rel_path")"
+            local target_file="$HOME/.config/mise/tasks/$rel_path"
+
+            mkdir -p "$target_dir"
+
+            if [ -L "$target_file" ]; then
+                ln -sf "$task_file" "$target_file"
+                print_success "Updated symlink: mise task $rel_path"
+            elif [ -e "$target_file" ]; then
+                print_warning "Skipped mise task $rel_path (file exists, not overwriting)"
+            else
+                ln -sf "$task_file" "$target_file"
+                print_success "Symlinked mise task: $rel_path"
+            fi
+        done
+    fi
+
+    if [ -d "$src_bin" ]; then
+        print_header "Installing mise bin scripts"
+        mkdir -p "$HOME/.config/mise/bin"
+        find "$src_bin" -type f -print0 | while IFS= read -r -d '' bin_file; do
+            [ -x "$bin_file" ] || continue
+            local bin_name
+            bin_name="$(basename "$bin_file")"
+            ln -sf "$bin_file" "$HOME/.config/mise/bin/$bin_name"
+            print_success "Symlinked mise bin: $bin_name"
+        done
+    fi
+}
+
+# ============================================================================
 # Dotfiles Symlink Setup
 # ============================================================================
 
@@ -378,6 +449,68 @@ setup_dotfiles() {
     ln -sf "$DOTFILES_DIR/.hushlogin" "$HOME/.hushlogin"
     print_success "Symlinked .hushlogin"
 
+    # Symlink .gitconfig (uses [includeIf] for per-directory identities)
+    backup_if_exists "$HOME/.gitconfig"
+    ln -sf "$DOTFILES_DIR/.gitconfig" "$HOME/.gitconfig"
+    print_success "Symlinked .gitconfig"
+
+    # Git identity files are per-machine and NOT committed to the dotfiles repo.
+    # Prompt for both on first install. Defaults match the dotfiles owner;
+    # anyone forking can just type their own.
+    mkdir -p "$HOME/.config/git"
+    ln -sf "$DOTFILES_DIR/.config/git/ignore" "$HOME/.config/git/ignore"
+    print_success "Symlinked global git ignore"
+
+    # Personal identity (~/Projects)
+    if [ ! -f "$DOTFILES_DIR/.config/git/personal.gitconfig" ]; then
+        local personal_name="" personal_email=""
+        printf "Personal git name [dev360]: "
+        read -r personal_name
+        personal_name="${personal_name:-dev360}"
+        printf "Personal git email [c.toivola@gmail.com]: "
+        read -r personal_email
+        personal_email="${personal_email:-c.toivola@gmail.com}"
+        cat > "$DOTFILES_DIR/.config/git/personal.gitconfig" <<EOF
+# Per-machine personal identity. NOT committed to dotfiles repo.
+[user]
+    name = $personal_name
+    email = $personal_email
+EOF
+        print_success "Created personal.gitconfig as $personal_name <$personal_email>"
+    fi
+    ln -sf "$DOTFILES_DIR/.config/git/personal.gitconfig" "$HOME/.config/git/personal.gitconfig"
+    print_success "Symlinked personal.gitconfig"
+
+    # Work identity (~/Code) — no default; blank skips
+    if [ ! -f "$DOTFILES_DIR/.config/git/work.gitconfig" ]; then
+        local work_name="" work_email=""
+        printf "Work git name [dev360]: "
+        read -r work_name
+        work_name="${work_name:-dev360}"
+        printf "Work git email (leave blank to skip): "
+        read -r work_email
+        if [ -n "$work_email" ]; then
+            cat > "$DOTFILES_DIR/.config/git/work.gitconfig" <<EOF
+# Per-machine work identity. NOT committed to dotfiles repo.
+[user]
+    name = $work_name
+    email = $work_email
+EOF
+            print_success "Created work.gitconfig as $work_name <$work_email>"
+        else
+            cat > "$DOTFILES_DIR/.config/git/work.gitconfig" <<'EOF'
+# Per-machine work identity. NOT committed to dotfiles repo.
+# Add your work email below.
+# [user]
+#     name = your-handle
+#     email = you@work.example
+EOF
+            print_warning "Created empty work.gitconfig — edit $DOTFILES_DIR/.config/git/work.gitconfig to set your work email"
+        fi
+    fi
+    ln -sf "$DOTFILES_DIR/.config/git/work.gitconfig" "$HOME/.config/git/work.gitconfig"
+    print_success "Symlinked work.gitconfig"
+
     # Symlink .config directories
     mkdir -p "$HOME/.config"
 
@@ -396,46 +529,12 @@ setup_dotfiles() {
     ln -sf "$DOTFILES_DIR/.config/starship.toml" "$HOME/.config/starship.toml"
     print_success "Symlinked starship config"
 
-    # Mise global tasks (symlink individual tasks, don't overwrite existing)
-    if [ -d "$DOTFILES_DIR/.config/mise/tasks" ]; then
-        print_header "Installing mise global tasks"
-        mkdir -p "$HOME/.config/mise/tasks"
+    # Ghostty
+    backup_if_exists "$HOME/.config/ghostty"
+    ln -sf "$DOTFILES_DIR/.config/ghostty" "$HOME/.config/ghostty"
+    print_success "Symlinked ghostty config"
 
-        # Find all task files and symlink them if they don't exist
-        # Note: -perm +111 works on macOS, -perm /111 works on Linux for "any execute bit"
-        find "$DOTFILES_DIR/.config/mise/tasks" -type f \( -perm +111 -o -perm /111 \) 2>/dev/null | while read -r task_file; do
-            # Get relative path from tasks directory
-            rel_path="${task_file#$DOTFILES_DIR/.config/mise/tasks/}"
-            target_dir="$HOME/.config/mise/tasks/$(dirname "$rel_path")"
-            target_file="$HOME/.config/mise/tasks/$rel_path"
-
-            mkdir -p "$target_dir"
-
-            if [ -L "$target_file" ]; then
-                # Already a symlink - update it
-                ln -sf "$task_file" "$target_file"
-                print_success "Updated symlink: mise task $rel_path"
-            elif [ -e "$target_file" ]; then
-                # File exists but not a symlink - don't overwrite
-                print_warning "Skipped mise task $rel_path (file exists, not overwriting)"
-            else
-                # Doesn't exist - create symlink
-                ln -sf "$task_file" "$target_file"
-                print_success "Symlinked mise task: $rel_path"
-            fi
-        done
-    fi
-
-    # Mise bin scripts (symlink individual scripts)
-    if [ -d "$DOTFILES_DIR/.config/mise/bin" ]; then
-        mkdir -p "$HOME/.config/mise/bin"
-        find "$DOTFILES_DIR/.config/mise/bin" -type f \( -perm +111 -o -perm /111 \) 2>/dev/null | while read -r bin_file; do
-            bin_name="$(basename "$bin_file")"
-            target_file="$HOME/.config/mise/bin/$bin_name"
-            ln -sf "$bin_file" "$target_file"
-            print_success "Symlinked mise bin: $bin_name"
-        done
-    fi
+    setup_mise "$DOTFILES_DIR"
 
     # Create .zshrc.local if it doesn't exist
     if [ ! -f "$HOME/.zshrc.local" ]; then
@@ -489,6 +588,7 @@ main() {
     install_dev_tools
     install_container_tools
     install_cli_utilities
+    install_fonts
     setup_dotfiles
     post_install
 }

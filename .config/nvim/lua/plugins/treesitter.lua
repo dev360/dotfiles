@@ -3,6 +3,7 @@
 ---@type LazySpec
 return {
   "nvim-treesitter/nvim-treesitter",
+  branch = "master",
   opts = {
     ensure_installed = {
       "lua",
@@ -11,6 +12,7 @@ return {
       "typescript", -- TypeScript syntax parsing
       "tsx",        -- TSX/React syntax parsing
       "javascript", -- JavaScript syntax parsing
+      "python",     -- Python syntax parsing
     },
   },
 }

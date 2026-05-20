@@ -288,3 +288,4 @@ function pre_zsh_exit() {
 
 # Trap the EXIT signal and run the function
 trap pre_zsh_exit EXIT
+export PATH="$HOME/.local/bin:$PATH"

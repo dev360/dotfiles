@@ -1,3 +1,14 @@
+# Identity is supplied by per-machine files in ~/.config/git/ (NOT committed).
+# install.sh creates them on first run.
+
+# Personal repos under ~/Projects/
+[includeIf "gitdir:~/Projects/"]
+    path = ~/.config/git/personal.gitconfig
+
+# Work repos under ~/Code/
+[includeIf "gitdir:~/Code/"]
+    path = ~/.config/git/work.gitconfig
+
 [alias]
     co = checkout
     ci = commit
@@ -5,7 +16,7 @@
     a = add
     d = diff
     l = log --graph --pretty=format:'%C(yellow)%h%Creset -%C(red)%d%Creset %s %Cgreen(%ar) %C(bold blue)<%an>%Creset'
-    lol = log --graph --abbrev-commit --date=relative 
+    lol = log --graph --abbrev-commit --date=relative
 
 [color]
     ui = true

@@ -9,8 +9,9 @@ return {
     opts = {
       ensure_installed = {
         "lua_ls",
-        "gopls",      -- Go LSP server
-        "ts_ls",      -- TypeScript LSP server
+        "gopls",          -- Go LSP server
+        "ts_ls",          -- TypeScript LSP server
+        "basedpyright",   -- Python LSP server
       },
     },
   },
