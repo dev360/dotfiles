@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #MISE description="Delete a git worktree with safety checks"
-#MISE usage="worktree:delete [target] [-f] [--keep-branch] [-y]"
+#USAGE arg "[target]" help="Worktree directory or branch name (defaults to current worktree)"
+#USAGE flag "-f --force" help="Force delete even with untracked files or unmerged commits"
+#USAGE flag "--keep-branch" help="Remove the worktree but keep the branch"
+#USAGE flag "-y --yes" help="Skip the confirmation prompt"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)

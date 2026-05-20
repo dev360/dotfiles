@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #MISE description="Create a new git worktree with optional branch creation"
-#MISE usage="worktree:new <branch> [-p <prefix>]"
+#USAGE arg "<branch>" help="Branch name to create the worktree for (created from default branch if it doesn't exist)"
+#USAGE flag "-p --prefix <prefix>" help="Directory name prefix (default: repo name when not in main-structure mode)"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)

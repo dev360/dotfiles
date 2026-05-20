@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 #MISE description="List all git worktrees with status information"
-#MISE usage="worktree:list"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)

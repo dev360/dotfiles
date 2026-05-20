@@ -1,6 +1,14 @@
 #!/usr/bin/env bash
 #MISE description="Start a Claude development session in a worktree"
-#MISE usage="worktree:dev [branch-or-dir] [--new] [--orchestrator] [--pane] [--prompt ['...']] [--agent <name>]"
+#USAGE arg "[branch-or-dir]" help="Worktree to enter (defaults to current worktree if inside one)"
+#USAGE flag "--new" help="Create the worktree first if it doesn't exist"
+#USAGE flag "--orchestrator" help="Split view with two Claude instances (implementer + orchestrator)"
+#USAGE flag "--pane" help="Side-by-side vim + claude in one tab (requires --vim)"
+#USAGE flag "--vim" help="Include a vim tab in the layout"
+#USAGE flag "--resume" help="Resume the previous Claude session"
+#USAGE flag "--dangerous" help="Skip Claude permission prompts"
+#USAGE flag "--prompt <message>" help="Auto-send a prompt to Claude on start"
+#USAGE flag "--agent <name>" help="Use a specific Claude agent"
 set -euo pipefail
 
 # Use MISE_ORIGINAL_CWD if available (mise runs global tasks from $HOME)
